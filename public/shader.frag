@@ -52,9 +52,9 @@ vec2 nearLine(vec2 probe, vec2 coord1, vec2 coord2) {
     vec3 b = toCartesian(coord2);
     vec3 n = normalize(cross(a, b));
 
-    float x = dot(p, cross(n, a));
-    float y = dot(p, cross(n, b));
-    return vec2(x, y);
+    float x = dot(p, a);
+    float y = dot(p, cross(n, a));
+    return vec2(x, y) * 0.5 + 0.5;
 }
 
 void main() {
