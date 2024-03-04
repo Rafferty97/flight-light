@@ -14,28 +14,33 @@ interface ShaderSource {
 function App() {
   const canvas = useRef<HTMLCanvasElement>(null);
   const map = useRef<Map | undefined>();
-  const [sun, setSun] = useState<LongLat>([0, 0]);
-  const [pointer, setPointer] = useState<LongLat>([0, 0]);
+  const [rotate, setRotate] = useState(0.5);
+  const [sun, setSun] = useState<LongLat>([3.6, -0.4]);
+  const [src, setSrc] = useState<LongLat>([0, 0]);
+  const [dst, setDst] = useState<LongLat>([0, 0]);
 
   useEffect(() => {
     if (!canvas.current) return;
     map.current ||= new Map(canvas.current);
-    map.current.render(sun, pointer);
-  }, [sun, pointer]);
+    map.current.render(rotate, sun, src, dst);
+  }, [rotate, sun, src, dst]);
 
   useEffect(() => {
     loadAirports().then((a) => {
-      const mel = a.find((a) => a.code == "MEL");
-      mel && setSun(mel.coords);
+      const [a1, a2] = ["AKL", "YVR"];
+      const p1 = a.find((a) => a.code == a1);
+      p1 && setSrc(p1.coords);
+      const p2 = a.find((a) => a.code == a2);
+      p2 && setDst(p2.coords);
     });
   }, []);
 
   const handleMouseMove = (ev: React.MouseEvent) => {
     const rect = canvas.current?.getBoundingClientRect();
     if (!rect) return;
-    const lon = 2.0 * Math.PI * ((ev.pageX - rect.left) / rect.width - 0.5);
+    const lon = 2.0 * Math.PI * ((ev.pageX - rect.left) / rect.width + rotate - 0.5);
     const lat = -Math.PI * ((ev.pageY - rect.top) / rect.height - 0.5);
-    setPointer([lon, lat]);
+    setDst([lon, lat]);
   };
 
   return (
@@ -43,7 +48,11 @@ function App() {
       <div id="canvas-container">
         <canvas id="canvas" ref={canvas} onMouseMove={handleMouseMove} />
       </div>
-      <pre style={{ width: "20rem", textAlign: "center", padding: "2rem" }}>{formatCoords(sun, "\n")}</pre>
+      <div>
+        <pre style={{ width: "20rem", textAlign: "center", margin: "2rem" }}>{formatCoords(sun, "\n")}</pre>
+        <pre style={{ width: "20rem", textAlign: "center", margin: "2rem" }}>{formatCoords(src, "\n")}</pre>
+        <pre style={{ width: "20rem", textAlign: "center", margin: "2rem" }}>{formatCoords(dst, "\n")}</pre>
+      </div>
     </div>
   );
 }
@@ -87,7 +96,7 @@ class Map {
     return { program, positionBuffer };
   }
 
-  async render(sun: LongLat, pointer?: LongLat) {
+  async render(rotate: number, sun: LongLat, src?: LongLat, dst?: LongLat) {
     const { canvas, gl } = this;
     const props = await this.props;
 
@@ -101,7 +110,9 @@ class Map {
     gl.vertexAttribPointer(vertexPosition, 2, gl.FLOAT, false, 0, 0);
 
     gl.uniform2fv(gl.getUniformLocation(props.program, "uSun"), sun);
-    gl.uniform2fv(gl.getUniformLocation(props.program, "uPointer"), pointer ?? [0, 0]);
+    gl.uniform2fv(gl.getUniformLocation(props.program, "uSrc"), src ?? [0, 0]);
+    gl.uniform2fv(gl.getUniformLocation(props.program, "uDst"), dst ?? [0, 0]);
+    gl.uniform1f(gl.getUniformLocation(props.program, "uRotate"), rotate);
 
     gl.clearColor(0.0, 0.0, 0.0, 1.0); // Clear to black, fully opaque
     gl.clear(gl.COLOR_BUFFER_BIT);

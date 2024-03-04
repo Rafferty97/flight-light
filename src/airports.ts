@@ -10,7 +10,6 @@ export async function loadAirports(): Promise<Airport[]> {
   const out: Airport[] = [];
   for (const line of raw.split("\n")) {
     const parts = line.trim().split(":");
-    console.log(parts[16], parts[15]);
     out.push({
       code: parts[1],
       coords: [
