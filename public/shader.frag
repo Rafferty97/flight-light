@@ -59,7 +59,7 @@ vec2 projectLine(vec2 probe, vec2 coord1, vec2 coord2) {
 float wrappedDistance2(vec2 a, vec2 b) {
     float x = acos(cos(a.x - b.x));
     float y = acos(cos(a.y - b.y));
-    return x * x + y + y;
+    return x * x + y * y;
 }
 
 float wrappedDistance(vec2 a, vec2 b) {
@@ -70,6 +70,7 @@ float lineDist(vec2 probe, vec2 coord1, vec2 coord2) {
     vec3 p = toCartesian(probe);
     vec3 a = toCartesian(coord1);
     vec3 b = toCartesian(coord2);
+    vec3 n = normalize(cross(a, b));
     
     // FIXME: Make better - Newton's method?
     // 1. Convert to cartesian
@@ -80,14 +81,15 @@ float lineDist(vec2 probe, vec2 coord1, vec2 coord2) {
     // 3. Iterate
 
     float dist = 10000.0;
-    float j = clamp(dot(p - a, b - a) / dot(b - a, b - a), 0.0, 1.0);
-    for (int i=0; i <= 8; i++) {
+    vec3 k = p - n * dot(p, n);
+    float j = dot(k - a, b - a) / dot(b - a, b - a); // FIXME: NOT CORRECT
+    for (int i = 0; i < 1; i++) {
         vec2 proj = fromCartesian(normalize(a + j * (b - a)));
-        vec2 proj2 = fromCartesian(normalize(a + (j + 0.0001) * (b - a)));
         dist = min(dist, wrappedDistance2(probe, proj));
 
+        vec2 proj2 = fromCartesian(normalize(a + (j + 0.01) * (b - a)));
         vec2 delta = proj2 - proj;
-        j += 0.0001 * (dot(probe - proj, delta) / dot(delta, delta));
+        j += 0.01 * (dot(probe - proj, delta) / dot(delta, delta));
         j = clamp(j, 0.0, 1.0);
     }
     return sqrt(dist);
