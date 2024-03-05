@@ -102,7 +102,9 @@ bool testPoints(vec2 a, vec2 b, float d) {
 }
 
 void main() {
-    gl_FragColor = 0.9 * texture2D(uSampler, vTextureCoord) + 0.2;
+    vec4 day = texture2D(uSampler, vTextureCoord);
+    float lum = (day.x + day.y + day.z) / 3.0;
+    vec4 night = vec4(0.3, 0.0, 0.0, 1.0) + 0.45 * vec4(lum, lum, lum, 0.0);
 
     vec2 coord = (vTextureCoord - vec2(0.5, 0.5)) * vec2(2.0 * PI, -PI);
     vec2 sun = uSun;
@@ -110,15 +112,15 @@ void main() {
     float angle = (180.0 / PI) * calcAngle(coord, uSun);
 
     if (angle > 108.0) {
-        gl_FragColor *= 0.25;
+        gl_FragColor = night;
     } else if (angle > 102.0) {
-        gl_FragColor *= 0.5;
+        gl_FragColor = 0.75 * night + 0.25 * day;
     } else if (angle > 96.0) {
-        gl_FragColor *= 0.75;
+        gl_FragColor = 0.5 * night + 0.5 * day;
     } else if (angle > 90.0) {
-        gl_FragColor *= 1.0;
+        gl_FragColor = 0.25 * night + 0.75 * day;
     } else {
-        gl_FragColor *= 1.25;
+        gl_FragColor = day;
     }
 
     if (testPoints(coord, projectLine(coord, uSrc, uDst), 0.005)) {

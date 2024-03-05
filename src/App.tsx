@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import "./App.css";
 import { LongLat } from "./types";
-import { createLine, formatCoords, geodesic, midCoord, vadd, verticesFromCoords, vsub } from "./util";
+import { createLine, formatCoords, geodesic, midCoord, normaliseCoords, vadd, verticesFromCoords, vsub } from "./util";
 import { loadAirports } from "./airports";
 
 type WebGL = WebGLRenderingContext;
@@ -14,7 +14,7 @@ interface ShaderSource {
 function App() {
   const canvas = useRef<HTMLCanvasElement>(null);
   const map = useRef<Map | undefined>();
-  const [rotate, setRotate] = useState(0.1);
+  const [rotate, setRotate] = useState(0.7);
   const [sun, setSun] = useState<LongLat>([3.6, -0.4]);
   const [src, setSrc] = useState<LongLat>([0, 0]);
   const [dst, setDst] = useState<LongLat>([0, 0]);
@@ -39,8 +39,9 @@ function App() {
   const handleMouseMove = (ev: React.MouseEvent) => {
     const rect = canvas.current?.getBoundingClientRect();
     if (!rect) return;
-    const lon = 2.0 * Math.PI * ((ev.pageX - rect.left) / rect.width + rotate - 0.5);
-    const lat = -Math.PI * ((ev.pageY - rect.top) / rect.height - 0.5);
+    const lon = 2.0 * Math.PI * ((ev.pageX - (rect.left + rect.width / 2)) / (2 * rect.height) + rotate);
+    const lat = -Math.PI * ((ev.pageY - (rect.top + rect.height / 2)) / rect.height);
+    // setSun([lon, Math.min(Math.max(lat, -0.40910518), 0.40910518)]);
     setDst([lon, lat]);
   };
 
@@ -50,9 +51,15 @@ function App() {
         <canvas id="canvas" ref={canvas} onMouseMove={handleMouseMove} />
       </div>
       <div>
-        <pre style={{ width: "20rem", textAlign: "center", margin: "2rem" }}>{formatCoords(sun, "\n")}</pre>
-        <pre style={{ width: "20rem", textAlign: "center", margin: "2rem" }}>{formatCoords(src, "\n")}</pre>
-        <pre style={{ width: "20rem", textAlign: "center", margin: "2rem" }}>{formatCoords(dst, "\n")}</pre>
+        <pre style={{ width: "20rem", textAlign: "center", margin: "2rem" }}>
+          {formatCoords(normaliseCoords(sun), "\n")}
+        </pre>
+        <pre style={{ width: "20rem", textAlign: "center", margin: "2rem" }}>
+          {formatCoords(normaliseCoords(src), "\n")}
+        </pre>
+        <pre style={{ width: "20rem", textAlign: "center", margin: "2rem" }}>
+          {formatCoords(normaliseCoords(dst), "\n")}
+        </pre>
         <input
           type="range"
           min="1"
@@ -121,8 +128,11 @@ class Map {
     const props = await this.props;
 
     if (resizeCanvasToDisplaySize(canvas)) {
-      gl.viewport(0, 0, canvas.width, canvas.height);
+      // gl.viewport(0, 0, canvas.width, canvas.height);
+      const [wid, hei] = [2 * canvas.height, canvas.height];
+      gl.viewport((canvas.width - wid) / 2, (canvas.height - hei) / 2, wid, hei);
     }
+    const width = 5 / canvas.height;
 
     gl.clearColor(0.0, 0.0, 0.0, 1.0); // Clear to black, fully opaque
     gl.clear(gl.COLOR_BUFFER_BIT);
@@ -142,7 +152,7 @@ class Map {
     const src2 = vsub(src, [2 * Math.PI * rotate, 0]);
     const dst2 = vsub(dst, [2 * Math.PI * rotate, 0]);
 
-    const linePoints = createLine(verticesFromCoords(geodesic(src2, dst2, 0.05)), 0.005);
+    const linePoints = createLine(verticesFromCoords(geodesic(src2, dst2, 0.05)), width);
     gl.bufferData(gl.ARRAY_BUFFER, linePoints, gl.DYNAMIC_DRAW);
     gl.enableVertexAttribArray(vertexPosition2);
     gl.uniform4fv(gl.getUniformLocation(props.lineShader, "uColor"), [0, 1, 1, 1]);

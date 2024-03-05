@@ -48,9 +48,16 @@ export function vrot90(a: Vec2): Vec2 {
   return [a[1], -a[0]];
 }
 
+export function normaliseCoords(coords: LongLat): LongLat {
+  return [
+    coords[0] - 2 * Math.PI * Math.round(coords[0] / (2 * Math.PI)),
+    Math.min(Math.max(coords[1], -Math.PI), Math.PI),
+  ];
+}
+
 export function formatCoords(coords: LongLat, delim = " ") {
   const inner = (angle: number, neg: string, pos: string) => {
-    const degrees = Math.abs((angle * 180) / Math.PI);
+    const degrees = Math.abs(angle * (180 / Math.PI));
     const d = Math.floor(degrees).toFixed(0);
     const m = Math.floor((60 * degrees) % 60)
       .toFixed(0)
@@ -84,13 +91,15 @@ export function midCoord(a: LongLat, b: LongLat): LongLat {
 
 export function geodesic(a: LongLat, b: LongLat, step: number): LongLat[] {
   const dot = Math.cos(step);
-  const out = [fromCart(toCart(a))];
-  const stack = [toCart(b)];
-  let lastPoint = a;
-  let last = toCart(a);
-  let next: Vec3 | undefined;
 
-  while ((next = stack.pop())) {
+  let last = toCart(a);
+  let lastPoint = fromCart(last);
+  let next: Vec3 | undefined = toCart(b);
+
+  const out = [lastPoint];
+  const stack: Vec3[] = [];
+
+  while (next) {
     const delta = vdot3(next, last);
     if (delta > dot || out.length + stack.length > 1000) {
       const point = fromCart(next);
@@ -98,10 +107,11 @@ export function geodesic(a: LongLat, b: LongLat, step: number): LongLat[] {
       out.push(point);
       last = next;
       lastPoint = point;
+      next = stack.pop();
     } else {
       const mid = vnorm3(vadd3(last, next));
       stack.push(next);
-      stack.push(mid);
+      next = mid;
     }
   }
 
@@ -109,7 +119,7 @@ export function geodesic(a: LongLat, b: LongLat, step: number): LongLat[] {
 }
 
 export function verticesFromCoords(points: LongLat[]): Vec2[] {
-  return points.map((p) => [p[0] / Math.PI, p[1] / (0.5 * Math.PI)]);
+  return points.map((p) => [p[0] / Math.PI, p[1] / Math.PI]);
 }
 
 export function createLine(points: Vec2[], radius: number): Float32Array {
