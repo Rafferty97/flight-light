@@ -121,13 +121,9 @@ void main() {
         gl_FragColor *= 1.25;
     }
 
-    // if (testPoints(coord, projectLine(coord, uSrc, uDst), 0.005)) {
-    //     gl_FragColor = vec4(0.0, 1.0, 1.0, 1.0);
-    // }
-    gl_FragColor.y += 1.0 - clamp(2.0 * lineDist(coord, uSrc, uDst), 0.0, 1.0);
-    if (testPoints(coord, uSrc, 0.02) || testPoints(coord, uDst, 0.02)) {
-        gl_FragColor = vec4(1.0, 0.0, 0.0, 1.0);
-    }   
+    if (testPoints(coord, projectLine(coord, uSrc, uDst), 0.005)) {
+        gl_FragColor = vec4(0.0, 1.0, 1.0, 1.0);
+    }
 
     if (testPoints(coord, uSun, 0.05)) {
         gl_FragColor += vec4(1.0, 0.9, 0.5, 0.0);

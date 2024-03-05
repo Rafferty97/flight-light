@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import "./App.css";
 import { LongLat } from "./types";
-import { formatCoords } from "./util";
+import { createLine, formatCoords, geodesic, midCoord, vadd, verticesFromCoords, vsub } from "./util";
 import { loadAirports } from "./airports";
 
 type WebGL = WebGLRenderingContext;
@@ -14,7 +14,7 @@ interface ShaderSource {
 function App() {
   const canvas = useRef<HTMLCanvasElement>(null);
   const map = useRef<Map | undefined>();
-  const [rotate, setRotate] = useState(0.5);
+  const [rotate, setRotate] = useState(0.1);
   const [sun, setSun] = useState<LongLat>([3.6, -0.4]);
   const [src, setSrc] = useState<LongLat>([0, 0]);
   const [dst, setDst] = useState<LongLat>([0, 0]);
@@ -27,7 +27,8 @@ function App() {
 
   useEffect(() => {
     loadAirports().then((a) => {
-      const [a1, a2] = ["AKL", "YVR"];
+      // const [a1, a2] = ["AKL", "YVR"];
+      const [a1, a2] = ["AKL", "LIS"];
       const p1 = a.find((a) => a.code == a1);
       p1 && setSrc(p1.coords);
       const p2 = a.find((a) => a.code == a2);
@@ -52,6 +53,13 @@ function App() {
         <pre style={{ width: "20rem", textAlign: "center", margin: "2rem" }}>{formatCoords(sun, "\n")}</pre>
         <pre style={{ width: "20rem", textAlign: "center", margin: "2rem" }}>{formatCoords(src, "\n")}</pre>
         <pre style={{ width: "20rem", textAlign: "center", margin: "2rem" }}>{formatCoords(dst, "\n")}</pre>
+        <input
+          type="range"
+          min="1"
+          max="100"
+          value={(100 * rotate).toFixed(0)}
+          onChange={(ev) => setRotate(parseInt(ev.target.value) / 100)}
+        />
       </div>
     </div>
   );
@@ -61,8 +69,10 @@ class Map {
   private canvas: HTMLCanvasElement;
   private gl: WebGL;
   private props: Promise<{
-    program: WebGLProgram;
-    positionBuffer: WebGLBuffer;
+    mapShader: WebGLProgram;
+    lineShader: WebGLProgram;
+    mapBuffer: WebGLBuffer;
+    lineBuffer: WebGLBuffer;
   }>;
 
   constructor(canvas: HTMLCanvasElement) {
@@ -78,25 +88,35 @@ class Map {
   async init() {
     const { gl } = this;
 
-    const program = initShaders(gl, {
-      vertex: await (await fetch("/shader.vert")).text(),
-      fragment: await (await fetch("/shader.frag")).text(),
+    const mapShader = initShader(gl, {
+      vertex: await (await fetch("/map.vert")).text(),
+      fragment: await (await fetch("/map.frag")).text(),
+    });
+
+    const lineShader = initShader(gl, {
+      vertex: await (await fetch("/line.vert")).text(),
+      fragment: await (await fetch("/line.frag")).text(),
     });
 
     const earthTexture = await loadTexture(gl, "/earth_resized.jpg");
+    gl.useProgram(mapShader);
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, earthTexture);
-    gl.uniform1i(gl.getUniformLocation(program, "uSampler"), 0);
+    gl.uniform1i(gl.getUniformLocation(mapShader, "uSampler"), 0);
 
-    const positionBuffer = gl.createBuffer();
-    if (!positionBuffer) throw Error("Cannot create buffer");
-    gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+    const mapBuffer = gl.createBuffer();
+    if (!mapBuffer) throw Error("Cannot create buffer");
+    gl.useProgram(lineShader);
+    gl.bindBuffer(gl.ARRAY_BUFFER, mapBuffer);
     gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, 1, -1, -1, 1, 1, -1, -1, 1, -1, 1, 1]), gl.STATIC_DRAW);
 
-    return { program, positionBuffer };
+    const lineBuffer = gl.createBuffer();
+    if (!lineBuffer) throw Error("Cannot create buffer");
+
+    return { mapShader, lineShader, mapBuffer, lineBuffer };
   }
 
-  async render(rotate: number, sun: LongLat, src?: LongLat, dst?: LongLat) {
+  async render(rotate: number, sun: LongLat, src: LongLat, dst: LongLat) {
     const { canvas, gl } = this;
     const props = await this.props;
 
@@ -104,23 +124,37 @@ class Map {
       gl.viewport(0, 0, canvas.width, canvas.height);
     }
 
-    const vertexPosition = gl.getAttribLocation(props.program, "aVertexPosition");
-    gl.enableVertexAttribArray(vertexPosition);
-    gl.bindBuffer(gl.ARRAY_BUFFER, props.positionBuffer);
-    gl.vertexAttribPointer(vertexPosition, 2, gl.FLOAT, false, 0, 0);
-
-    gl.uniform2fv(gl.getUniformLocation(props.program, "uSun"), sun);
-    gl.uniform2fv(gl.getUniformLocation(props.program, "uSrc"), src ?? [0, 0]);
-    gl.uniform2fv(gl.getUniformLocation(props.program, "uDst"), dst ?? [0, 0]);
-    gl.uniform1f(gl.getUniformLocation(props.program, "uRotate"), rotate);
-
     gl.clearColor(0.0, 0.0, 0.0, 1.0); // Clear to black, fully opaque
     gl.clear(gl.COLOR_BUFFER_BIT);
+
+    gl.useProgram(props.mapShader);
+    const vertexPosition = gl.getAttribLocation(props.mapShader, "aVertexPosition");
+    gl.bindBuffer(gl.ARRAY_BUFFER, props.mapBuffer);
+    gl.vertexAttribPointer(vertexPosition, 2, gl.FLOAT, false, 0, 0);
+    gl.enableVertexAttribArray(vertexPosition);
+    gl.uniform2fv(gl.getUniformLocation(props.mapShader, "uSun"), sun);
+    gl.uniform1f(gl.getUniformLocation(props.mapShader, "uRotate"), rotate);
     gl.drawArrays(gl.TRIANGLES, 0, 6);
+
+    gl.useProgram(props.lineShader);
+    const vertexPosition2 = gl.getAttribLocation(props.lineShader, "aVertexPosition");
+    gl.bindBuffer(gl.ARRAY_BUFFER, props.lineBuffer);
+    const src2 = vsub(src, [2 * Math.PI * rotate, 0]);
+    const dst2 = vsub(dst, [2 * Math.PI * rotate, 0]);
+
+    const linePoints = createLine(verticesFromCoords(geodesic(src2, dst2, 0.05)), 0.005);
+    gl.bufferData(gl.ARRAY_BUFFER, linePoints, gl.DYNAMIC_DRAW);
+    gl.enableVertexAttribArray(vertexPosition2);
+    gl.uniform4fv(gl.getUniformLocation(props.lineShader, "uColor"), [0, 1, 1, 1]);
+    gl.vertexAttribPointer(vertexPosition2, 2, gl.FLOAT, false, 0, 0);
+    for (const offset of [0, -1, 1]) {
+      gl.uniform1f(gl.getUniformLocation(props.lineShader, "uOffset"), offset);
+      gl.drawArrays(gl.TRIANGLE_STRIP, 0, linePoints.length / 2);
+    }
   }
 }
 
-function initShaders(gl: WebGL, shader: ShaderSource): WebGLProgram {
+function initShader(gl: WebGL, shader: ShaderSource): WebGLProgram {
   const vertexShader = loadShader(gl, gl.VERTEX_SHADER, shader.vertex);
   const fragmentShader = loadShader(gl, gl.FRAGMENT_SHADER, shader.fragment);
 
@@ -141,9 +175,6 @@ function initShaders(gl: WebGL, shader: ShaderSource): WebGLProgram {
   if (!gl.getProgramParameter(shaderProgram, gl.LINK_STATUS)) {
     throw Error("Unable to initialize the shader program: " + gl.getProgramInfoLog(shaderProgram));
   }
-
-  // Use the program
-  gl.useProgram(shaderProgram);
 
   return shaderProgram;
 }
