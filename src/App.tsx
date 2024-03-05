@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import "./App.css";
 import { LongLat } from "./types";
-import { createLine, formatCoords, geodesic, normaliseCoords, verticesFromCoords, vsub } from "./util";
+import { calcAngle, createLine, formatCoords, geodesic, normaliseCoords, verticesFromCoords, vsub } from "./util";
 import { loadAirports } from "./airports";
 
 type WebGL = WebGLRenderingContext;
@@ -10,6 +10,12 @@ interface ShaderSource {
   vertex: string;
   fragment: string;
 }
+
+/**
+ * TODO:
+ * - Function to interpolate two coordinates linearly
+ * - Plot sun angle over the course of going from src to dst
+ */
 
 function App() {
   const canvas = useRef<HTMLCanvasElement>(null);
@@ -55,7 +61,7 @@ function App() {
         <pre style={{ width: "20rem", textAlign: "center", margin: "2rem" }}>
           {formatCoords(normaliseCoords(sun), "\n")}
         </pre>
-        {/* <pre>{calc}</pre> */}
+        <pre>Sun angle: {(90 - (calcAngle(sun, src) * 180) / Math.PI).toFixed(2)}°</pre>
         <pre style={{ width: "20rem", textAlign: "center", margin: "2rem" }}>
           {formatCoords(normaliseCoords(src), "\n")}
         </pre>

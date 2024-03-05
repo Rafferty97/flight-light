@@ -48,6 +48,16 @@ export function vrot90(a: Vec2): Vec2 {
   return [a[1], -a[0]];
 }
 
+export function hav(theta: number): number {
+  return 0.5 * (1.0 - Math.cos(theta));
+}
+
+export function calcAngle(a: LongLat, b: LongLat): number {
+  let havTheta = hav(a[1] - b[1]) + Math.cos(a[1]) * Math.cos(b[1]) * hav(a[0] - b[0]);
+  havTheta = Math.min(Math.max(havTheta, 0.0), 1.0);
+  return 2.0 * Math.asin(Math.sqrt(havTheta));
+}
+
 export function normaliseCoords(coords: LongLat): LongLat {
   return [
     coords[0] - 2 * Math.PI * Math.round(coords[0] / (2 * Math.PI)),
