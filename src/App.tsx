@@ -41,8 +41,8 @@ function App() {
     if (!rect) return;
     const lon = 2.0 * Math.PI * ((ev.pageX - (rect.left + rect.width / 2)) / (2 * rect.height) + rotate);
     const lat = -Math.PI * ((ev.pageY - (rect.top + rect.height / 2)) / rect.height);
-    // setSun([lon, Math.min(Math.max(lat, -0.40910518), 0.40910518)]);
-    setDst([lon, lat]);
+    setSun([lon, Math.min(Math.max(lat, -0.40910518), 0.40910518)]);
+    // setDst([lon, lat]);
   };
 
   return (
@@ -105,11 +105,19 @@ class Map {
       fragment: await (await fetch("/line.frag")).text(),
     });
 
-    const earthTexture = await loadTexture(gl, "/earth_resized.jpg");
+    const dayTex = await loadTexture(gl, "/earth.jpg");
+    const nightTex = await loadTexture(gl, "/night.jpg");
+    const strokeTex = await loadTexture(gl, "/stroke.png");
     gl.useProgram(mapShader);
     gl.activeTexture(gl.TEXTURE0);
-    gl.bindTexture(gl.TEXTURE_2D, earthTexture);
-    gl.uniform1i(gl.getUniformLocation(mapShader, "uSampler"), 0);
+    gl.bindTexture(gl.TEXTURE_2D, dayTex);
+    gl.activeTexture(gl.TEXTURE1);
+    gl.bindTexture(gl.TEXTURE_2D, nightTex);
+    gl.activeTexture(gl.TEXTURE2);
+    gl.bindTexture(gl.TEXTURE_2D, strokeTex);
+    gl.uniform1i(gl.getUniformLocation(mapShader, "uDay"), 0);
+    gl.uniform1i(gl.getUniformLocation(mapShader, "uNight"), 1);
+    gl.uniform1i(gl.getUniformLocation(mapShader, "uStroke"), 2);
 
     const mapBuffer = gl.createBuffer();
     if (!mapBuffer) throw Error("Cannot create buffer");
@@ -223,29 +231,14 @@ async function loadTexture(gl: WebGL, url: string): Promise<WebGLTexture> {
     image.onload = function () {
       gl.bindTexture(gl.TEXTURE_2D, texture);
       gl.texImage2D(gl.TEXTURE_2D, level, internalFormat, srcFormat, srcType, image);
-
-      // WebGL1 has different requirements for power of 2 images
-      // vs non power of 2 images so check if the image is a
-      // power of 2 in both dimensions.
-      if (isPowerOf2(image.width) && isPowerOf2(image.height)) {
-        // Yes, it's a power of 2. Generate mips.
-        gl.generateMipmap(gl.TEXTURE_2D);
-      } else {
-        // No, it's not a power of 2. Turn off mips and set
-        // wrapping to clamp to edge
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-      }
-
+      gl.generateMipmap(gl.TEXTURE_2D);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
       res(texture);
     };
     image.src = url;
   });
-}
-
-function isPowerOf2(value: number) {
-  return (value & (value - 1)) == 0;
 }
 
 function resizeCanvasToDisplaySize(canvas: HTMLCanvasElement): boolean {

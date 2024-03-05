@@ -3,7 +3,9 @@ varying vec2 vTextureCoord;
 uniform vec2 uSun;
 uniform vec2 uSrc;
 uniform vec2 uDst;
-uniform sampler2D uSampler;
+uniform sampler2D uDay;
+uniform sampler2D uNight;
+uniform sampler2D uStroke;
 
 const float PI = 3.1415926535897932384626433832795;
 const float DEG = 0.01745329251;
@@ -102,9 +104,15 @@ bool testPoints(vec2 a, vec2 b, float d) {
 }
 
 void main() {
-    vec4 day = texture2D(uSampler, vTextureCoord);
-    float lum = (day.x + day.y + day.z) / 3.0;
-    vec4 night = vec4(0.3, 0.0, 0.0, 1.0) + 0.45 * vec4(lum, lum, lum, 0.0);
+    vec4 dayTex = texture2D(uDay, vTextureCoord);
+    vec4 nightTex = texture2D(uNight, vTextureCoord);
+    vec4 strokeTex = texture2D(uStroke, vTextureCoord);
+
+    vec4 day = dayTex + 0.5 * strokeTex + 0.1;
+    vec4 night = nightTex + 0.1 * dayTex + strokeTex - 0.05;
+
+    // float lum = (day.x + day.y + day.z) / 3.0;
+    // vec4 night = vec4(0.3, 0.0, 0.0, 1.0) + 0.45 * vec4(lum, lum, lum, 0.0);
 
     vec2 coord = (vTextureCoord - vec2(0.5, 0.5)) * vec2(2.0 * PI, -PI);
     vec2 sun = uSun;
