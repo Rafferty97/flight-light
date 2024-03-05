@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import "./App.css";
 import { LongLat } from "./types";
-import { createLine, formatCoords, geodesic, midCoord, normaliseCoords, vadd, verticesFromCoords, vsub } from "./util";
+import { createLine, formatCoords, geodesic, normaliseCoords, verticesFromCoords, vsub } from "./util";
 import { loadAirports } from "./airports";
 
 type WebGL = WebGLRenderingContext;
@@ -18,12 +18,13 @@ function App() {
   const [sun, setSun] = useState<LongLat>([3.6, -0.4]);
   const [src, setSrc] = useState<LongLat>([0, 0]);
   const [dst, setDst] = useState<LongLat>([0, 0]);
+  const [blend, setBlend] = useState(true);
 
   useEffect(() => {
     if (!canvas.current) return;
     map.current ||= new Map(canvas.current);
-    map.current.render(rotate, sun, src, dst);
-  }, [rotate, sun, src, dst]);
+    map.current.render(rotate, sun, src, dst, blend);
+  }, [rotate, sun, src, dst, blend]);
 
   useEffect(() => {
     loadAirports().then((a) => {
@@ -54,6 +55,7 @@ function App() {
         <pre style={{ width: "20rem", textAlign: "center", margin: "2rem" }}>
           {formatCoords(normaliseCoords(sun), "\n")}
         </pre>
+        {/* <pre>{calc}</pre> */}
         <pre style={{ width: "20rem", textAlign: "center", margin: "2rem" }}>
           {formatCoords(normaliseCoords(src), "\n")}
         </pre>
@@ -67,6 +69,9 @@ function App() {
           value={(100 * rotate).toFixed(0)}
           onChange={(ev) => setRotate(parseInt(ev.target.value) / 100)}
         />
+        <label>
+          <input type="checkbox" checked={blend} onChange={(ev) => setBlend(ev.target.checked)} /> Blend
+        </label>
       </div>
     </div>
   );
@@ -131,7 +136,7 @@ class Map {
     return { mapShader, lineShader, mapBuffer, lineBuffer };
   }
 
-  async render(rotate: number, sun: LongLat, src: LongLat, dst: LongLat) {
+  async render(rotate: number, sun: LongLat, src: LongLat, dst: LongLat, blend: boolean) {
     const { canvas, gl } = this;
     const props = await this.props;
 
@@ -152,6 +157,7 @@ class Map {
     gl.enableVertexAttribArray(vertexPosition);
     gl.uniform2fv(gl.getUniformLocation(props.mapShader, "uSun"), sun);
     gl.uniform1f(gl.getUniformLocation(props.mapShader, "uRotate"), rotate);
+    gl.uniform1i(gl.getUniformLocation(props.mapShader, "uBlend"), +blend);
     gl.drawArrays(gl.TRIANGLES, 0, 6);
 
     gl.useProgram(props.lineShader);
