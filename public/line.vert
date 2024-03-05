@@ -1,6 +1,7 @@
 attribute vec4 aVertexPosition;
-uniform float uOffset;
+uniform mat4 uView;
 
 void main() {
-    gl_Position = aVertexPosition * vec4(1.0, 2.0, 1.0, 1.0) + vec4(2.0 * uOffset, 0, 0, 0);
+    gl_Position = uView * aVertexPosition;
+    gl_Position.y *= 2.0;
 }

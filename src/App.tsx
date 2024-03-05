@@ -1,8 +1,21 @@
 import { useEffect, useRef, useState } from "react";
 import "./App.css";
 import { LongLat } from "./types";
-import { calcAngle, createLine, formatCoords, geodesic, normaliseCoords, verticesFromCoords, vsub } from "./util";
+import {
+  createCircle,
+  createLine,
+  formatCoords,
+  geodesic,
+  interpCoords,
+  makeMat,
+  normaliseCoords,
+  toHorizontalCoords,
+  verticesFromCoords,
+  vsub,
+} from "./util";
 import { loadAirports } from "./airports";
+import { calcSun } from "./sun";
+import { DateTime } from "luxon";
 
 type WebGL = WebGLRenderingContext;
 
@@ -13,29 +26,35 @@ interface ShaderSource {
 
 /**
  * TODO:
- * - Function to interpolate two coordinates linearly
- * - Plot sun angle over the course of going from src to dst
+ * - Add plane icon to show trip progress
+ * - Add start and end timestamps to compute sun position too
+ * - Draw sun with a polygon
  */
 
 function App() {
   const canvas = useRef<HTMLCanvasElement>(null);
   const map = useRef<Map | undefined>();
   const [rotate, setRotate] = useState(0.7);
-  const [sun, setSun] = useState<LongLat>([3.6, -0.4]);
   const [src, setSrc] = useState<LongLat>([0, 0]);
   const [dst, setDst] = useState<LongLat>([0, 0]);
+  const [progress, setProgress] = useState(1);
   const [blend, setBlend] = useState(true);
+
+  const location = interpCoords(src, dst, progress);
+  const start = DateTime.local(2024, 9, 7, 16, 5, { zone: "Pacific/Auckland" });
+  const end = DateTime.local(2024, 9, 7, 14, 5, { zone: "America/Vancouver" });
+  const t = start.plus(end.diff(start).mapUnits((t) => progress * t));
+  const sun = calcSun(t);
 
   useEffect(() => {
     if (!canvas.current) return;
     map.current ||= new Map(canvas.current);
-    map.current.render(rotate, sun, src, dst, blend);
-  }, [rotate, sun, src, dst, blend]);
+    map.current.render(rotate, sun, src, location, blend);
+  }, [rotate, sun, src, location, blend]);
 
   useEffect(() => {
     loadAirports().then((a) => {
-      // const [a1, a2] = ["AKL", "YVR"];
-      const [a1, a2] = ["AKL", "LIS"];
+      const [a1, a2] = ["AKL", "YVR"];
       const p1 = a.find((a) => a.code == a1);
       p1 && setSrc(p1.coords);
       const p2 = a.find((a) => a.code == a2);
@@ -43,41 +62,63 @@ function App() {
     });
   }, []);
 
+  // useEffect(() => {
+  //   const timer = setInterval(() => setSun(calcSun(DateTime.now())), 10000);
+  //   return () => clearInterval(timer);
+  // }, []);
+
   const handleMouseMove = (ev: React.MouseEvent) => {
     const rect = canvas.current?.getBoundingClientRect();
     if (!rect) return;
     const lon = 2.0 * Math.PI * ((ev.pageX - (rect.left + rect.width / 2)) / (2 * rect.height) + rotate);
     const lat = -Math.PI * ((ev.pageY - (rect.top + rect.height / 2)) / rect.height);
-    setSun([lon, Math.min(Math.max(lat, -0.40910518), 0.40910518)]);
+    // setSun([lon, Math.min(Math.max(lat, -0.40910518), 0.40910518)]);
     // setDst([lon, lat]);
   };
+
+  const handleClick = (ev: React.MouseEvent) => {
+    const rect = canvas.current?.getBoundingClientRect();
+    if (!rect) return;
+    const lon = 2.0 * Math.PI * ((ev.pageX - (rect.left + rect.width / 2)) / (2 * rect.height) + rotate);
+    const lat = -Math.PI * ((ev.pageY - (rect.top + rect.height / 2)) / rect.height);
+    // setSun([lon, Math.min(Math.max(lat, -0.40910518), 0.40910518)]);
+    setDst([lon, lat]);
+  };
+
+  const h = toHorizontalCoords(location, sun);
 
   return (
     <div id="container">
       <div id="canvas-container">
-        <canvas id="canvas" ref={canvas} onMouseMove={handleMouseMove} />
+        <canvas id="canvas" ref={canvas} onMouseMove={handleMouseMove} onClick={handleClick} />
       </div>
-      <div>
-        <pre style={{ width: "20rem", textAlign: "center", margin: "2rem" }}>
-          {formatCoords(normaliseCoords(sun), "\n")}
-        </pre>
-        <pre>Sun angle: {(90 - (calcAngle(sun, src) * 180) / Math.PI).toFixed(2)}°</pre>
-        <pre style={{ width: "20rem", textAlign: "center", margin: "2rem" }}>
-          {formatCoords(normaliseCoords(src), "\n")}
-        </pre>
-        <pre style={{ width: "20rem", textAlign: "center", margin: "2rem" }}>
-          {formatCoords(normaliseCoords(dst), "\n")}
-        </pre>
+      <div style={{ textAlign: "center" }}>
+        <pre style={{ width: "20rem", margin: "2rem" }}>{formatCoords(normaliseCoords(sun), "\n")}</pre>
+        <pre>Azimuth: {(h.azimuth * (180 / Math.PI)).toFixed(2)}°</pre>
+        <pre>Zenith: {(h.zenith * (180 / Math.PI)).toFixed(2)}°</pre>
+        <pre style={{ width: "20rem", margin: "2rem" }}>{formatCoords(normaliseCoords(src), "\n")}</pre>
+        <pre style={{ width: "20rem", margin: "2rem" }}>{formatCoords(normaliseCoords(dst), "\n")}</pre>
         <input
           type="range"
-          min="1"
+          min="0"
           max="100"
           value={(100 * rotate).toFixed(0)}
+          style={{ width: "90%" }}
           onChange={(ev) => setRotate(parseInt(ev.target.value) / 100)}
         />
+        <br />
         <label>
           <input type="checkbox" checked={blend} onChange={(ev) => setBlend(ev.target.checked)} /> Blend
         </label>
+        <br />
+        <input
+          type="range"
+          min="0"
+          max="100"
+          defaultValue="100"
+          style={{ width: "90%" }}
+          onChange={(ev) => setProgress(parseInt(ev.target.value) / 100)}
+        />
       </div>
     </div>
   );
@@ -91,6 +132,7 @@ class Map {
     lineShader: WebGLProgram;
     mapBuffer: WebGLBuffer;
     lineBuffer: WebGLBuffer;
+    sunBuffer: WebGLBuffer;
   }>;
 
   constructor(canvas: HTMLCanvasElement) {
@@ -139,7 +181,12 @@ class Map {
     const lineBuffer = gl.createBuffer();
     if (!lineBuffer) throw Error("Cannot create buffer");
 
-    return { mapShader, lineShader, mapBuffer, lineBuffer };
+    const sunBuffer = gl.createBuffer();
+    if (!sunBuffer) throw Error("Cannot create buffer");
+    gl.bindBuffer(gl.ARRAY_BUFFER, sunBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, createCircle([0, 0], 1, 12), gl.DYNAMIC_DRAW);
+
+    return { mapShader, lineShader, mapBuffer, lineBuffer, sunBuffer };
   }
 
   async render(rotate: number, sun: LongLat, src: LongLat, dst: LongLat, blend: boolean) {
@@ -159,8 +206,8 @@ class Map {
     gl.useProgram(props.mapShader);
     const vertexPosition = gl.getAttribLocation(props.mapShader, "aVertexPosition");
     gl.bindBuffer(gl.ARRAY_BUFFER, props.mapBuffer);
-    gl.vertexAttribPointer(vertexPosition, 2, gl.FLOAT, false, 0, 0);
     gl.enableVertexAttribArray(vertexPosition);
+    gl.vertexAttribPointer(vertexPosition, 2, gl.FLOAT, false, 0, 0);
     gl.uniform2fv(gl.getUniformLocation(props.mapShader, "uSun"), sun);
     gl.uniform1f(gl.getUniformLocation(props.mapShader, "uRotate"), rotate);
     gl.uniform1i(gl.getUniformLocation(props.mapShader, "uBlend"), +blend);
@@ -171,15 +218,27 @@ class Map {
     gl.bindBuffer(gl.ARRAY_BUFFER, props.lineBuffer);
     const src2 = vsub(src, [2 * Math.PI * rotate, 0]);
     const dst2 = vsub(dst, [2 * Math.PI * rotate, 0]);
-
     const linePoints = createLine(verticesFromCoords(geodesic(src2, dst2, 0.05)), width);
     gl.bufferData(gl.ARRAY_BUFFER, linePoints, gl.DYNAMIC_DRAW);
     gl.enableVertexAttribArray(vertexPosition2);
-    gl.uniform4fv(gl.getUniformLocation(props.lineShader, "uColor"), [0, 1, 1, 1]);
     gl.vertexAttribPointer(vertexPosition2, 2, gl.FLOAT, false, 0, 0);
-    for (const offset of [0, -1, 1]) {
-      gl.uniform1f(gl.getUniformLocation(props.lineShader, "uOffset"), offset);
+    gl.uniform4fv(gl.getUniformLocation(props.lineShader, "uColor"), [0, 1, 1, 1]);
+    for (const offset of [-2, 0, 2]) {
+      gl.uniformMatrix4fv(gl.getUniformLocation(props.lineShader, "uView"), false, makeMat([offset, 0], 1));
       gl.drawArrays(gl.TRIANGLE_STRIP, 0, linePoints.length / 2);
+    }
+
+    gl.bindBuffer(gl.ARRAY_BUFFER, props.sunBuffer);
+    gl.enableVertexAttribArray(vertexPosition2);
+    gl.vertexAttribPointer(vertexPosition2, 2, gl.FLOAT, false, 0, 0);
+    gl.uniform4fv(gl.getUniformLocation(props.lineShader, "uColor"), [1, 1, 0, 1]);
+    for (const offset of [-2, 0, 2]) {
+      gl.uniformMatrix4fv(
+        gl.getUniformLocation(props.lineShader, "uView"),
+        false,
+        makeMat([offset + (sun[0] - 2 * Math.PI * rotate) / Math.PI, sun[1] / Math.PI], 0.02)
+      );
+      gl.drawArrays(gl.TRIANGLE_STRIP, 0, 50);
     }
   }
 }
