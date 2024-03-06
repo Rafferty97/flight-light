@@ -242,7 +242,7 @@ class Map {
     gl.bindBuffer(gl.ARRAY_BUFFER, props.sunBuffer)
     gl.enableVertexAttribArray(vertexPosition2)
     gl.vertexAttribPointer(vertexPosition2, 2, gl.FLOAT, false, 0, 0)
-    gl.uniform4fv(gl.getUniformLocation(props.lineShader, 'uColor'), [1, 1, 0, 1])
+    gl.uniform4fv(gl.getUniformLocation(props.lineShader, 'uColor'), [1, 1, 0.5, 1])
     for (const offset of [-2, 0, 2]) {
       gl.uniformMatrix4fv(
         gl.getUniformLocation(props.lineShader, 'uView'),
