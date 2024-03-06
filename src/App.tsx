@@ -35,7 +35,7 @@ interface ShaderSource {
 function App() {
   const canvas = useRef<HTMLCanvasElement>(null)
   const map = useRef<Map | undefined>()
-  const [rotate, setRotate] = useState(0.7)
+  const [rot, setRot] = useState(0.7)
   const [src, setSrc] = useState<LongLat>([0, 0])
   const [dst, setDst] = useState<LongLat>([0, 0])
   const [progress, setProgress] = useState(1)
@@ -47,6 +47,8 @@ function App() {
   const t = start.plus(end.diff(start).mapUnits((t) => progress * t))
   const location = interpCoords(src, dst, progress)
   const sun = calcSun(t)
+
+  const rotate = location[0] / (2 * Math.PI)
 
   useEffect(() => {
     if (!canvas.current) return
@@ -107,9 +109,9 @@ function App() {
             type="range"
             min="0"
             max="100"
-            value={(100 * rotate).toFixed(0)}
+            value={(100 * rot).toFixed(0)}
             style={{ width: '90%' }}
-            onChange={(ev) => setRotate(parseInt(ev.target.value) / 100)}
+            onChange={(ev) => setRot(parseInt(ev.target.value) / 100)}
           />
           <br />
           <label>
