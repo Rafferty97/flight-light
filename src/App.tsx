@@ -89,39 +89,45 @@ function App() {
 
   const h = toHorizontalCoords(location, sun)
 
+  const flight = useMemo(() => ({ start, end, duration: end.diff(start), src, dst }), [start, end, src, dst])
+
   return (
     <div id="container">
       <div id="canvas-container">
         <canvas id="canvas" ref={canvas} onMouseMove={handleMouseMove} onClick={handleClick} />
       </div>
-      <div style={{ textAlign: 'center' }}>
-        <pre style={{ width: '20rem', margin: '2rem' }}>{formatCoords(normaliseCoords(sun), '\n')}</pre>
-        <pre>Azimuth: {(h.azimuth * (180 / Math.PI)).toFixed(2)}°</pre>
-        <pre>Zenith: {(h.zenith * (180 / Math.PI)).toFixed(2)}°</pre>
-        <pre style={{ width: '20rem', margin: '2rem' }}>{formatCoords(normaliseCoords(src), '\n')}</pre>
-        <pre style={{ width: '20rem', margin: '2rem' }}>{formatCoords(normaliseCoords(dst), '\n')}</pre>
-        <input
-          type="range"
-          min="0"
-          max="100"
-          value={(100 * rotate).toFixed(0)}
-          style={{ width: '90%' }}
-          onChange={(ev) => setRotate(parseInt(ev.target.value) / 100)}
-        />
-        <br />
-        <label>
-          <input type="checkbox" checked={blend} onChange={(ev) => setBlend(ev.target.checked)} /> Blend
-        </label>
-        <br />
-        <input
-          type="range"
-          min="0"
-          max="100"
-          defaultValue="100"
-          style={{ width: '90%' }}
-          onChange={(ev) => setProgress(parseInt(ev.target.value) / 100)}
-        />
-        <SunPlot src={src} dst={dst} start={start} end={end} progress={progress} />
+      <div id="sidebar">
+        <div style={{ textAlign: 'center' }}>
+          <pre style={{ width: '20rem', margin: '2rem' }}>{formatCoords(normaliseCoords(sun), '\n')}</pre>
+          <pre>Azimuth: {(h.azimuth * (180 / Math.PI)).toFixed(2)}°</pre>
+          <pre>Zenith: {(h.zenith * (180 / Math.PI)).toFixed(2)}°</pre>
+          <pre style={{ width: '20rem', margin: '2rem' }}>{formatCoords(normaliseCoords(src), '\n')}</pre>
+          <pre style={{ width: '20rem', margin: '2rem' }}>{formatCoords(normaliseCoords(dst), '\n')}</pre>
+          <input
+            type="range"
+            min="0"
+            max="100"
+            value={(100 * rotate).toFixed(0)}
+            style={{ width: '90%' }}
+            onChange={(ev) => setRotate(parseInt(ev.target.value) / 100)}
+          />
+          <br />
+          <label>
+            <input type="checkbox" checked={!blend} onChange={(ev) => setBlend(!ev.target.checked)} /> Twilight bands
+          </label>
+          <br />
+          <input
+            type="range"
+            min="0"
+            max="100"
+            defaultValue="100"
+            style={{ width: '90%' }}
+            onChange={(ev) => setProgress(parseInt(ev.target.value) / 100)}
+          />
+        </div>
+        <div>
+          <SunPlot flight={flight} progress={progress} blend={blend} />
+        </div>
       </div>
     </div>
   )
