@@ -1,22 +1,23 @@
-import { LongLat } from "./types";
+import { LongLat } from './types'
 
 export interface Airport {
-  code: string;
-  coords: LongLat;
+  code: string
+  coords: LongLat
 }
 
 export async function loadAirports(): Promise<Airport[]> {
-  const raw = await (await fetch("/airports.txt")).text();
-  const out: Airport[] = [];
-  for (const line of raw.split("\n")) {
-    const parts = line.trim().split(":");
+  const raw = await (await fetch('/airports.txt')).text()
+  const out: Airport[] = []
+  for (const line of raw.split('\n')) {
+    const parts = line.trim().split(':')
+    if (typeof parts[1] !== 'string') continue
     out.push({
       code: parts[1],
       coords: [
         parseFloat(parts[15]) * (Math.PI / 180), //
         parseFloat(parts[14]) * (Math.PI / 180),
       ],
-    });
+    })
   }
-  return out;
+  return out
 }

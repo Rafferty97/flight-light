@@ -13,7 +13,7 @@ import {
   verticesFromCoords,
   vsub,
 } from './util'
-import { loadAirports } from './airports'
+import { Airport, loadAirports } from './airports'
 import { calcSun } from './sun'
 import { DateTime } from 'luxon'
 import { SunPlot } from './SunPlot'
@@ -32,18 +32,34 @@ interface ShaderSource {
  * - Draw sun with a polygon
  */
 
+const ZERO = [0, 0]
+
 function App() {
   const canvas = useRef<HTMLCanvasElement>(null)
   const map = useRef<Map | undefined>()
   const [rot, setRot] = useState(0.7)
-  const [src, setSrc] = useState<LongLat>([0, 0])
-  const [dst, setDst] = useState<LongLat>([0, 0])
-  const [progress, setProgress] = useState(1)
+  const [srcText, setSrcText] = useState('')
+  const [dstText, setDstText] = useState('')
+  // const [progress, setProgress] = useState(1)
   const [blend, setBlend] = useState(true)
+  const [ports, setPorts] = useState<Airport[]>([])
 
-  const start = DateTime.local(2024, 9, 7, 16, 5, { zone: 'Pacific/Auckland' })
-  const end = DateTime.local(2024, 9, 7, 14, 5, { zone: 'America/Vancouver' })
+  const src = ports.find((p) => p.code.toLowerCase() === srcText.toLowerCase())?.coords ?? ZERO
+  const dst = ports.find((p) => p.code.toLowerCase() === dstText.toLowerCase())?.coords ?? ZERO
 
+  // const start = DateTime.local(2024, 9, 7, 16, 5, { zone: 'Pacific/Auckland' })
+  // const end = DateTime.local(2024, 9, 7, 14, 5, { zone: 'America/Vancouver' })
+  // const start = DateTime.now()
+  // const end = start.plus({ hours: 24 })
+  const start = DateTime.local(2024, 3, 15, 16, 12, { zone: 'Australia/Perth' })
+  const end = DateTime.local(2024, 3, 15, 22, 37, { zone: 'Australia/Melbourne' })
+
+  useEffect(() => {
+    const int = setInterval(() => setRot(Math.random()), 100)
+    return () => clearInterval(int)
+  }, [setRot])
+
+  const progress = DateTime.now().diff(start).toMillis() / end.diff(start).toMillis()
   const t = start.plus(end.diff(start).mapUnits((t) => progress * t))
   const location = interpCoords(src, dst, progress)
   const sun = calcSun(t)
@@ -57,13 +73,7 @@ function App() {
   }, [rotate, sun, src, location, blend])
 
   useEffect(() => {
-    loadAirports().then((a) => {
-      const [a1, a2] = ['AKL', 'YVR']
-      const p1 = a.find((a) => a.code == a1)
-      p1 && setSrc(p1.coords)
-      const p2 = a.find((a) => a.code == a2)
-      p2 && setDst(p2.coords)
-    })
+    loadAirports().then(setPorts)
   }, [])
 
   // useEffect(() => {
@@ -100,7 +110,9 @@ function App() {
       </div>
       <div id="sidebar">
         <div style={{ textAlign: 'center' }}>
-          <pre style={{ width: '20rem', margin: '2rem' }}>{formatCoords(normaliseCoords(sun), '\n')}</pre>
+          <input value={srcText} onInput={(ev) => setSrcText((ev.target as HTMLInputElement).value)} />
+          <input value={dstText} onInput={(ev) => setDstText((ev.target as HTMLInputElement).value)} />
+          {/* <pre style={{ width: '20rem', margin: '2rem' }}>{formatCoords(normaliseCoords(sun), '\n')}</pre>
           <pre>Azimuth: {(h.azimuth * (180 / Math.PI)).toFixed(2)}°</pre>
           <pre>Zenith: {(h.zenith * (180 / Math.PI)).toFixed(2)}°</pre>
           <pre style={{ width: '20rem', margin: '2rem' }}>{formatCoords(normaliseCoords(src), '\n')}</pre>
@@ -109,7 +121,7 @@ function App() {
             type="range"
             min="0"
             max="100"
-            value={(100 * rot).toFixed(0)}
+            // value={(100 * rot).toFixed(0)}
             style={{ width: '90%' }}
             onChange={(ev) => setRot(parseInt(ev.target.value) / 100)}
           />
@@ -125,7 +137,7 @@ function App() {
             defaultValue="100"
             style={{ width: '90%' }}
             onChange={(ev) => setProgress(parseInt(ev.target.value) / 100)}
-          />
+          /> */}
         </div>
         <div>
           <SunPlot flight={flight} progress={progress} blend={blend} />
