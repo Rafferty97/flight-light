@@ -10,6 +10,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "geo-tz": "^8.1.6",
     "luxon": "^3.4.4",
     "react": "^18.2.0",
     "react-dom": "^18.2.0"
