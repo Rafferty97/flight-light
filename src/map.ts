@@ -22,6 +22,7 @@ export class Map {
     rotate: 0,
     sun: undefined as LongLat | undefined,
     src: [0, 0] as LongLat,
+    loc: [0, 0] as LongLat,
     dst: [0, 0] as LongLat,
     blend: true,
   }
@@ -40,18 +41,18 @@ export class Map {
     const { gl } = this
 
     const mapShader = initShader(gl, {
-      vertex: await (await fetch('/map.vert')).text(),
-      fragment: await (await fetch('/map.frag')).text(),
+      vertex: await (await fetch(`${import.meta.env.BASE_URL}map.vert`)).text(),
+      fragment: await (await fetch(`${import.meta.env.BASE_URL}map.frag`)).text(),
     })
 
     const lineShader = initShader(gl, {
-      vertex: await (await fetch('/line.vert')).text(),
-      fragment: await (await fetch('/line.frag')).text(),
+      vertex: await (await fetch(`${import.meta.env.BASE_URL}line.vert`)).text(),
+      fragment: await (await fetch(`${import.meta.env.BASE_URL}line.frag`)).text(),
     })
 
-    const dayTex = await loadTexture(gl, '/earth.jpg')
-    const nightTex = await loadTexture(gl, '/night.jpg')
-    const strokeTex = await loadTexture(gl, '/stroke.png')
+    const dayTex = await loadTexture(gl, `${import.meta.env.BASE_URL}earth.jpg`.toString())
+    const nightTex = await loadTexture(gl, `${import.meta.env.BASE_URL}night.jpg`.toString())
+    const strokeTex = await loadTexture(gl, `${import.meta.env.BASE_URL}stroke.png`.toString())
     gl.useProgram(mapShader)
     gl.activeTexture(gl.TEXTURE0)
     gl.bindTexture(gl.TEXTURE_2D, dayTex)
@@ -80,13 +81,13 @@ export class Map {
     return { mapShader, lineShader, mapBuffer, lineBuffer, sunBuffer }
   }
 
-  async setParams(rotate: number, sun: LongLat | undefined, src: LongLat, dst: LongLat, blend: boolean) {
-    this.params = { rotate, sun, src, dst, blend }
+  async setParams(rotate: number, sun: LongLat | undefined, src: LongLat, loc: LongLat, dst: LongLat, blend: boolean) {
+    this.params = { rotate, sun, src, loc, dst, blend }
   }
 
   async render() {
     const { canvas, gl } = this
-    const { rotate, sun, src, dst, blend } = this.params
+    const { rotate, sun, src, loc, dst, blend } = this.params
     const props = await this.props
 
     if (resizeCanvasToDisplaySize(canvas)) {
@@ -98,6 +99,9 @@ export class Map {
 
     gl.clearColor(0.0, 0.0, 0.0, 1.0) // Clear to black, fully opaque
     gl.clear(gl.COLOR_BUFFER_BIT)
+
+    gl.enable(gl.BLEND)
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA)
 
     gl.useProgram(props.mapShader)
     const vertexPosition = gl.getAttribLocation(props.mapShader, 'aVertexPosition')
@@ -114,14 +118,29 @@ export class Map {
     gl.bindBuffer(gl.ARRAY_BUFFER, props.lineBuffer)
     const src2 = vsub(src, [2 * Math.PI * rotate, 0])
     const dst2 = vsub(dst, [2 * Math.PI * rotate, 0])
-    const linePoints = createLine(verticesFromCoords(geodesic(src2, dst2, 0.05)), width)
+    const linePoints = createLine(verticesFromCoords(geodesic(src2, dst2, 0.05)), width / 2)
     gl.bufferData(gl.ARRAY_BUFFER, linePoints, gl.DYNAMIC_DRAW)
     gl.enableVertexAttribArray(vertexPosition2)
     gl.vertexAttribPointer(vertexPosition2, 2, gl.FLOAT, false, 0, 0)
-    gl.uniform4fv(gl.getUniformLocation(props.lineShader, 'uColor'), [0, 1, 1, 1])
+    gl.uniform4fv(gl.getUniformLocation(props.lineShader, 'uColor'), [1, 1, 1, 0.5])
     for (const offset of [-2, 0, 2]) {
       gl.uniformMatrix4fv(gl.getUniformLocation(props.lineShader, 'uView'), false, makeMat([offset, 0], 1))
       gl.drawArrays(gl.TRIANGLE_STRIP, 0, linePoints.length / 2)
+    }
+
+    gl.useProgram(props.lineShader)
+    const vertexPosition3 = gl.getAttribLocation(props.lineShader, 'aVertexPosition')
+    gl.bindBuffer(gl.ARRAY_BUFFER, props.lineBuffer)
+    const src3 = vsub(src, [2 * Math.PI * rotate, 0])
+    const dst3 = vsub(loc, [2 * Math.PI * rotate, 0])
+    const linePoints3 = createLine(verticesFromCoords(geodesic(src3, dst3, 0.05)), width)
+    gl.bufferData(gl.ARRAY_BUFFER, linePoints3, gl.DYNAMIC_DRAW)
+    gl.enableVertexAttribArray(vertexPosition3)
+    gl.vertexAttribPointer(vertexPosition3, 2, gl.FLOAT, false, 0, 0)
+    gl.uniform4fv(gl.getUniformLocation(props.lineShader, 'uColor'), [0, 1, 1, 1])
+    for (const offset of [-2, 0, 2]) {
+      gl.uniformMatrix4fv(gl.getUniformLocation(props.lineShader, 'uView'), false, makeMat([offset, 0], 1))
+      gl.drawArrays(gl.TRIANGLE_STRIP, 0, linePoints3.length / 2)
     }
 
     if (sun) {

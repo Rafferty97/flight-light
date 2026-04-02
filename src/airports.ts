@@ -8,7 +8,7 @@ export interface Airport {
 }
 
 export async function loadAirports(): Promise<Airport[]> {
-  const raw = await (await fetch('/airports.txt')).text()
+  const raw = await (await fetch(`${import.meta.env.BASE_URL}airports.txt`)).text()
   const out: Airport[] = []
   for (const line of raw.split('\n')) {
     const parts = line.trim().split(':')

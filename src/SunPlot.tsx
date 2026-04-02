@@ -33,7 +33,7 @@ export function SunPlot(props: SunPlotProps) {
 
   const d = useMemo(
     () => points.reduce((acc, p, idx) => `${acc} ${idx ? 'L' : 'M'} ${400 * p.t} ${100 - p.zenith}`, ''),
-    [points]
+    [points],
   )
 
   // FIXME: Newton's method to pin-point transitions
@@ -70,7 +70,7 @@ export function SunPlot(props: SunPlotProps) {
         {/* BLACK BACKGROUDN */}
         <rect x="0" y="0" width="400" height="200" fill="black" />
         {/* STARS */}
-        <image href="/stars.jpg" width="600" height="400" x="-100" y="-100" opacity={0.5} />
+        <image href={`${import.meta.env.BASE_URL}stars.jpg`} width="600" height="400" x="-100" y="-100" opacity={0.5} />
         {/* DAYLIGHT */}
         {props.blend === false ? (
           rects.map(({ t, w, fill }) => <rect x={400 * t} y="0" width={400 * w} height="200" fill={fill} />)

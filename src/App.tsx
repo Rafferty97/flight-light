@@ -233,7 +233,7 @@ function App() {
     const render = () => {
       if (!canvas.current) return
       map.current ||= new Map(canvas.current)
-      map.current.setParams(rotate, sun, srcCoords, location, blend)
+      map.current.setParams(rotate, sun, srcCoords, location, dstCoords, blend)
       map.current.render()
     }
     render()
