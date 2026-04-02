@@ -18,6 +18,13 @@ export class Map {
     lineBuffer: WebGLBuffer
     sunBuffer: WebGLBuffer
   }>
+  private params = {
+    rotate: 0,
+    sun: undefined as LongLat | undefined,
+    src: [0, 0] as LongLat,
+    dst: [0, 0] as LongLat,
+    blend: true,
+  }
 
   constructor(canvas: HTMLCanvasElement) {
     const gl = canvas.getContext('webgl2')
@@ -73,8 +80,13 @@ export class Map {
     return { mapShader, lineShader, mapBuffer, lineBuffer, sunBuffer }
   }
 
-  async render(rotate: number, sun: LongLat, src: LongLat, dst: LongLat, blend: boolean) {
+  async setParams(rotate: number, sun: LongLat | undefined, src: LongLat, dst: LongLat, blend: boolean) {
+    this.params = { rotate, sun, src, dst, blend }
+  }
+
+  async render() {
     const { canvas, gl } = this
+    const { rotate, sun, src, dst, blend } = this.params
     const props = await this.props
 
     if (resizeCanvasToDisplaySize(canvas)) {
@@ -92,7 +104,7 @@ export class Map {
     gl.bindBuffer(gl.ARRAY_BUFFER, props.mapBuffer)
     gl.enableVertexAttribArray(vertexPosition)
     gl.vertexAttribPointer(vertexPosition, 2, gl.FLOAT, false, 0, 0)
-    gl.uniform2fv(gl.getUniformLocation(props.mapShader, 'uSun'), sun)
+    if (sun) gl.uniform2fv(gl.getUniformLocation(props.mapShader, 'uSun'), sun)
     gl.uniform1f(gl.getUniformLocation(props.mapShader, 'uRotate'), rotate)
     gl.uniform1i(gl.getUniformLocation(props.mapShader, 'uBlend'), +blend)
     gl.drawArrays(gl.TRIANGLES, 0, 6)
@@ -112,17 +124,19 @@ export class Map {
       gl.drawArrays(gl.TRIANGLE_STRIP, 0, linePoints.length / 2)
     }
 
-    gl.bindBuffer(gl.ARRAY_BUFFER, props.sunBuffer)
-    gl.enableVertexAttribArray(vertexPosition2)
-    gl.vertexAttribPointer(vertexPosition2, 2, gl.FLOAT, false, 0, 0)
-    gl.uniform4fv(gl.getUniformLocation(props.lineShader, 'uColor'), [1, 1, 0.5, 1])
-    for (const offset of [-2, 0, 2]) {
-      gl.uniformMatrix4fv(
-        gl.getUniformLocation(props.lineShader, 'uView'),
-        false,
-        makeMat([offset + (sun[0] - 2 * Math.PI * rotate) / Math.PI, sun[1] / Math.PI], 0.02),
-      )
-      gl.drawArrays(gl.TRIANGLE_STRIP, 0, 50)
+    if (sun) {
+      gl.bindBuffer(gl.ARRAY_BUFFER, props.sunBuffer)
+      gl.enableVertexAttribArray(vertexPosition2)
+      gl.vertexAttribPointer(vertexPosition2, 2, gl.FLOAT, false, 0, 0)
+      gl.uniform4fv(gl.getUniformLocation(props.lineShader, 'uColor'), [1, 1, 0.5, 1])
+      for (const offset of [-2, 0, 2]) {
+        gl.uniformMatrix4fv(
+          gl.getUniformLocation(props.lineShader, 'uView'),
+          false,
+          makeMat([offset + (sun[0] - 2 * Math.PI * rotate) / Math.PI, sun[1] / Math.PI], 0.02),
+        )
+        gl.drawArrays(gl.TRIANGLE_STRIP, 0, 50)
+      }
     }
   }
 }

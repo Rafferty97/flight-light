@@ -33,7 +33,7 @@ export function SunPlot(props: SunPlotProps) {
 
   const d = useMemo(
     () => points.reduce((acc, p, idx) => `${acc} ${idx ? 'L' : 'M'} ${400 * p.t} ${100 - p.zenith}`, ''),
-    [points]
+    [points],
   )
 
   // FIXME: Newton's method to pin-point transitions
@@ -52,7 +52,7 @@ export function SunPlot(props: SunPlotProps) {
   }, [points])
 
   return (
-    <svg width="400" height="200" viewBox="0 0 400 200" xmlns="http://www.w3.org/2000/svg">
+    <svg viewBox="0 0 400 200" xmlns="http://www.w3.org/2000/svg">
       <defs>
         <clipPath id="clipRect">
           <rect x="0" y="0" width={400 * props.progress} height="200" />

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useCallback } from 'react'
+import { useEffect, useMemo, useRef, useCallback, useState } from 'react'
 import { interpCoords } from './util'
 import { Airport, loadAirports } from './airports'
 import { calcSun } from './sun'
@@ -30,11 +30,97 @@ function formatDuration(minutes: number): string {
   return `${h}h ${m.toString().padStart(2, '0')}m`
 }
 
+function matchAirports(ports: Airport[], query: string, limit = 6): Airport[] {
+  if (!query || query.length < 2) return []
+  const q = query.toLowerCase()
+  const exact = ports.filter((p) => p.code.toLowerCase() === q)
+  if (exact.length === 1) return [] // already resolved, no need for dropdown
+  const matches = ports.filter(
+    (p) =>
+      p.code.toLowerCase().startsWith(q) ||
+      p.city.toLowerCase().startsWith(q) ||
+      p.name.toLowerCase().startsWith(q) ||
+      p.city.toLowerCase().includes(q),
+  )
+  // Sort: code-first matches first, then city matches
+  matches.sort((a, b) => {
+    const aCode = a.code.toLowerCase().startsWith(q) ? 0 : 1
+    const bCode = b.code.toLowerCase().startsWith(q) ? 0 : 1
+    return aCode - bCode
+  })
+  return matches.slice(0, limit)
+}
+
+interface AirportInputProps {
+  label: string
+  value: string
+  onChange: (val: string) => void
+  timezone: string | null
+  ports: Airport[]
+}
+
+function AirportInput({ label, value, onChange, timezone, ports }: AirportInputProps) {
+  const [focused, setFocused] = useState(false)
+  const wrapperRef = useRef<HTMLDivElement>(null)
+
+  const suggestions = useMemo(() => (focused ? matchAirports(ports, value) : []), [focused, ports, value])
+
+  const resolved = ports.find((p) => p.code.toLowerCase() === value.toLowerCase())
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    const handler = (ev: MouseEvent) => {
+      if (wrapperRef.current && !wrapperRef.current.contains(ev.target as Node)) {
+        setFocused(false)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
+
+  return (
+    <div className="flex flex-col gap-1" ref={wrapperRef}>
+      <label className="text-xs text-neutral-500 tracking-widest uppercase">{label}</label>
+      <div className="relative">
+        <input
+          value={value}
+          placeholder="IATA code or city"
+          onChange={(ev) => onChange(ev.target.value.toUpperCase())}
+          onFocus={() => setFocused(true)}
+          className="w-full bg-neutral-800 border border-neutral-700 rounded px-3 py-2 text-white text-sm font-mono placeholder-neutral-600 focus:outline-none focus:border-sky-500 transition-colors"
+        />
+        {suggestions.length > 0 && (
+          <ul className="absolute z-10 w-full mt-1 bg-neutral-800 border border-neutral-700 rounded overflow-hidden shadow-xl">
+            {suggestions.map((p) => (
+              <li
+                key={p.code}
+                onMouseDown={() => {
+                  onChange(p.code)
+                  setFocused(false)
+                }}
+                className="flex items-center gap-2 px-3 py-2 cursor-pointer hover:bg-neutral-700 transition-colors"
+              >
+                <span className="text-sky-400 font-mono text-sm w-10 shrink-0">{p.code}</span>
+                <span className="text-neutral-300 text-sm truncate">{p.city}</span>
+                {p.name && p.name !== 'N/A' && (
+                  <span className="text-neutral-600 text-xs truncate ml-auto">{p.name}</span>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+      {timezone && <span className="text-xs text-sky-500 font-mono">{timezone}</span>}
+      {resolved && !timezone && <span className="text-xs text-neutral-600 font-mono">resolving timezone…</span>}
+    </div>
+  )
+}
+
 function App() {
   const canvas = useRef<HTMLCanvasElement>(null)
   const map = useRef<Map | undefined>()
 
-  const [ports, setPorts] = useLocalStorage<Airport[]>('ports', [])
+  const [ports, setPorts] = useState<Airport[]>([])
   const [srcText, setSrcText] = useLocalStorage('srcText', '')
   const [dstText, setDstText] = useLocalStorage('dstText', '')
   const [departureStr, setDepartureStr] = useLocalStorage('departureStr', '')
@@ -46,6 +132,14 @@ function App() {
   const [dstTimezone, setDstTimezone] = useLocalStorage<string | null>('dstTimezone', null)
   const [departure, setDeparture] = useLocalStorage<string | null>('departure', null)
   const [arrival, setArrival] = useLocalStorage<string | null>('arrival', null)
+
+  // Tick every minute in realtime mode to keep time display current
+  const [, setTick] = useState(0)
+  useEffect(() => {
+    if (mode !== 'realtime') return
+    const interval = setInterval(() => setTick((t) => t + 1), 60000)
+    return () => clearInterval(interval)
+  }, [mode])
 
   useEffect(() => {
     if (ports.length === 0) loadAirports().then(setPorts)
@@ -82,7 +176,6 @@ function App() {
     })
   }, [dst?.code, arrivalStr])
 
-  // Duration in minutes — can be negative
   const durationMinutes = useMemo(() => {
     if (!departure || !arrival) return null
     const start = DateTime.fromISO(departure)
@@ -113,6 +206,13 @@ function App() {
     return Math.min(Math.max(p, 0), 1)
   }, [flight, mode, scrubProgress])
 
+  // In realtime mode, currentTime is always DateTime.now() regardless of flight
+  const currentTime = useMemo(() => {
+    if (mode === 'realtime') return DateTime.now()
+    if (!flight) return null
+    return DateTime.fromMillis(flight.start.toMillis() + progress * flight.duration.toMillis())
+  }, [flight, mode, progress])
+
   const handleModeChange = useCallback(
     (next: Mode) => {
       if (next === 'scrub' && flight) {
@@ -122,13 +222,8 @@ function App() {
       }
       setMode(next)
     },
-    [flight, setMode, setScrubProgress],
+    [flight],
   )
-
-  const currentTime = useMemo(() => {
-    if (!flight) return null
-    return DateTime.fromMillis(flight.start.toMillis() + progress * flight.duration.toMillis())
-  }, [flight, progress])
 
   const location = useMemo(() => interpCoords(srcCoords, dstCoords, progress), [srcCoords, dstCoords, progress])
   const sun = useMemo(() => calcSun(currentTime ?? DateTime.now()), [currentTime])
@@ -138,14 +233,21 @@ function App() {
     const render = () => {
       if (!canvas.current) return
       map.current ||= new Map(canvas.current)
-      map.current.render(rotate, sun, srcCoords, location, blend)
+      map.current.setParams(rotate, sun, srcCoords, location, blend)
+      map.current.render()
     }
     render()
     if (mode === 'realtime') {
-      const interval = setInterval(render, 10000)
+      const interval = setInterval(render, 1000)
       return () => clearInterval(interval)
     }
   }, [rotate, sun, srcCoords, location, blend, mode])
+
+  useEffect(() => {
+    const render = () => map.current?.render()
+    window.addEventListener('resize', render)
+    return () => window.removeEventListener('resize', render)
+  }, [])
 
   const isNegativeDuration = durationMinutes !== null && durationMinutes <= 0
 
@@ -157,21 +259,15 @@ function App() {
       </div>
 
       {/* Sidebar */}
-      <div className="flex flex-col gap-3 w-72">
+      <div className="flex flex-col gap-3 w-[45ch]">
         {/* Flight inputs */}
-        <div className="flex-1 rounded-lg bg-neutral-900 border border-neutral-800 p-4 flex flex-col gap-4">
+        <div className="flex-1 rounded-lg bg-neutral-900 border border-neutral-800 p-4 flex flex-col gap-4 overflow-visible">
           <h2 className="text-xs font-semibold tracking-[0.2em] uppercase text-neutral-500">Flight</h2>
 
-          {/* From */}
+          <AirportInput label="From" value={srcText} onChange={setSrcText} timezone={srcTimezone} ports={ports} />
+
           <div className="flex flex-col gap-1">
-            <label className="text-xs text-neutral-500 tracking-widest uppercase">From</label>
-            <input
-              value={srcText}
-              placeholder="IATA code"
-              onChange={(ev) => setSrcText(ev.target.value.toUpperCase())}
-              className="bg-neutral-800 border border-neutral-700 rounded px-3 py-2 text-white text-sm font-mono placeholder-neutral-600 focus:outline-none focus:border-sky-500 transition-colors"
-            />
-            {/*{srcTimezone && <span className="text-xs text-sky-500 font-mono">{srcTimezone}</span>}*/}
+            <label className="text-xs text-neutral-500 tracking-widest uppercase">Departure</label>
             <input
               type="datetime-local"
               value={departureStr}
@@ -194,16 +290,10 @@ function App() {
             <div className="flex-1 h-px bg-neutral-700" />
           </div>
 
-          {/* To */}
+          <AirportInput label="To" value={dstText} onChange={setDstText} timezone={dstTimezone} ports={ports} />
+
           <div className="flex flex-col gap-1">
-            <label className="text-xs text-neutral-500 tracking-widest uppercase">To</label>
-            <input
-              value={dstText}
-              placeholder="IATA code"
-              onChange={(ev) => setDstText(ev.target.value.toUpperCase())}
-              className="bg-neutral-800 border border-neutral-700 rounded px-3 py-2 text-white text-sm font-mono placeholder-neutral-600 focus:outline-none focus:border-sky-500 transition-colors"
-            />
-            {/*{dstTimezone && <span className="text-xs text-sky-500 font-mono">{dstTimezone}</span>}*/}
+            <label className="text-xs text-neutral-500 tracking-widest uppercase">Arrival</label>
             <input
               type="datetime-local"
               value={arrivalStr}
@@ -258,11 +348,11 @@ function App() {
             </div>
           )}
 
-          {/* Realtime time display */}
-          {mode === 'realtime' && flight && currentTime && srcTimezone && dstTimezone && (
+          {/* Realtime time display — always shown if we have timezones */}
+          {mode === 'realtime' && currentTime && (srcTimezone || dstTimezone) && (
             <div className="flex justify-between text-xs font-mono text-neutral-400">
-              <span>{currentTime.setZone(srcTimezone).toFormat('HH:mm z')}</span>
-              <span>{currentTime.setZone(dstTimezone).toFormat('HH:mm z')}</span>
+              {srcTimezone ? <span>{currentTime.setZone(srcTimezone).toFormat('HH:mm z')}</span> : <span />}
+              {dstTimezone ? <span>{currentTime.setZone(dstTimezone).toFormat('HH:mm z')}</span> : <span />}
             </div>
           )}
         </div>
