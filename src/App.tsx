@@ -339,22 +339,25 @@ function App() {
                 onChange={(ev) => setScrubProgress(parseInt(ev.target.value) / 1000)}
                 className="w-full accent-sky-500"
               />
-              {currentTime && srcTimezone && dstTimezone && (
-                <div className="flex justify-between text-xs font-mono text-neutral-400">
-                  <span>{currentTime.setZone(srcTimezone).toFormat('HH:mm z')}</span>
-                  <span>{currentTime.setZone(dstTimezone).toFormat('HH:mm z')}</span>
-                </div>
-              )}
             </div>
           )}
 
-          {/* Realtime time display — always shown if we have timezones */}
-          {mode === 'realtime' && currentTime && (srcTimezone || dstTimezone) && (
-            <div className="flex justify-between text-xs font-mono text-neutral-400">
-              {srcTimezone ? <span>{currentTime.setZone(srcTimezone).toFormat('HH:mm z')}</span> : <span />}
-              {dstTimezone ? <span>{currentTime.setZone(dstTimezone).toFormat('HH:mm z')}</span> : <span />}
-            </div>
-          )}
+          {/* Info */}
+          <div className="flex flex-col gap-1">
+            <label className="text-xs text-neutral-500 tracking-widest uppercase">Info</label>
+
+            <span className="flex text-xs font-mono text-neutral-400">
+              Time at origin:
+              <span className="flex-1" />
+              {currentTime?.setZone(srcTimezone ?? undefined).toFormat('HH:mm') ?? ''}
+            </span>
+
+            <span className="flex text-xs font-mono text-neutral-400">
+              Time at destination:
+              <span className="flex-1" />
+              {currentTime?.setZone(dstTimezone ?? undefined).toFormat('HH:mm') ?? ''}
+            </span>
+          </div>
         </div>
 
         {/* Sun plot */}
