@@ -33,7 +33,7 @@ export function SunPlot(props: SunPlotProps) {
 
   const d = useMemo(
     () => points.reduce((acc, p, idx) => `${acc} ${idx ? 'L' : 'M'} ${400 * p.t} ${100 - p.zenith}`, ''),
-    [points],
+    [points]
   )
 
   // FIXME: Newton's method to pin-point transitions
@@ -46,7 +46,7 @@ export function SunPlot(props: SunPlotProps) {
       return [{ t, w: 1, fill: phaseRgba(phase) }]
     })
     for (let i = 1; i < out.length; i++) {
-      out[i - 1].w = out[i].t - out[i - 1].t
+      out[i - 1]!.w = out[i]!.t - out[i - 1]!.t
     }
     return out
   }, [points])

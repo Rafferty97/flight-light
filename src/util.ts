@@ -167,19 +167,19 @@ export function verticesFromCoords(points: LongLat[]): Vec2[] {
 export function createLine(points: Vec2[], radius: number): Float32Array {
   // Special cases
   if (points.length == 0) return new Float32Array()
-  if (points.length == 1) return createCircle(points[0], radius, 3)
+  if (points.length == 1) return createCircle(points[0]!, radius, 3)
 
   // Line
   const xs = points.flatMap((point, index) => {
-    const prev = points[Math.max(index - 1, 0)]
-    const next = points[Math.min(index + 1, points.length - 1)]
+    const prev = points[Math.max(index - 1, 0)]!
+    const next = points[Math.min(index + 1, points.length - 1)]!
     const o = vrot90(vmul(vnorm(vsub(next, prev)), radius))
     return [point[0] - o[0], point[1] - o[1], point[0] + o[0], point[1] + o[1]]
   })
 
   // End caps
-  xs.unshift(...startCap(points[0], points[1], radius, 3))
-  xs.push(...endCap(points[points.length - 1], points[points.length - 2], radius, 3))
+  xs.unshift(...startCap(points[0]!, points[1]!, radius, 3))
+  xs.push(...endCap(points[points.length - 1]!, points[points.length - 2]!, radius, 3))
 
   return new Float32Array(xs)
 }
