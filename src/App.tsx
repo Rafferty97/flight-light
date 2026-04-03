@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useCallback, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { interpCoords } from './util'
 import { Airport, loadAirports } from './airports'
 import { calcSun } from './sun'
@@ -449,18 +449,6 @@ function App() {
     return DateTime.fromMillis(flight.start.toMillis() + progress * flight.duration.toMillis())
   }, [flight, mode, realTime, progress])
 
-  const handleModeChange = useCallback(
-    (next: Mode) => {
-      if (next === 'scrub' && flight) {
-        const now = DateTime.now()
-        const p = now.diff(flight.start).toMillis() / flight.duration.toMillis()
-        setScrubProgress(Math.min(Math.max(p, 0), 1))
-      }
-      setMode(next)
-    },
-    [flight, setMode, setScrubProgress],
-  )
-
   const [location, heading] = useMemo(() => {
     const loc = interpCoords(srcCoords, dstCoords, progress)
     const loc2 = interpCoords(srcCoords, dstCoords, progress + 0.001)
@@ -478,10 +466,6 @@ function App() {
       map.current.render()
     }
     render()
-    if (mode === 'realtime') {
-      const interval = setInterval(render, 1000)
-      return () => clearInterval(interval)
-    }
   }, [rotate, sun, srcCoords, dstCoords, location, heading, blend, mode])
 
   useEffect(() => {
@@ -625,7 +609,7 @@ function App() {
 
         {/* Flights list screen */}
         {sidebarView === 'flights' && (
-          <div className="flex-1 rounded-lg bg-neutral-900 border border-neutral-800 p-4 overflow-hidden flex flex-col">
+          <div className="flex-1 rounded-lg bg-neutral-900 border border-neutral-800 p-3 overflow-hidden flex flex-col">
             <FlightsList
               flights={savedFlights}
               activeId={activeFlightId}
@@ -641,7 +625,7 @@ function App() {
         {/* Editor screen */}
         {sidebarView === 'editor' && (
           <>
-            <div className="flex-1 rounded-lg bg-neutral-900 border border-neutral-800 p-4 flex flex-col gap-4 overflow-visible">
+            <div className="flex-1 rounded-lg bg-neutral-900 border border-neutral-800 p-3 flex flex-col gap-4 overflow-visible">
               {/* Editor header: editable flight name + save button */}
               <div className="flex items-center gap-2">
                 <input
@@ -740,49 +724,8 @@ function App() {
                 />
               </div>
 
-              {/* Mode toggle */}
-              {flight && (
-                <div className="flex flex-col gap-2 pt-1">
-                  <label className="text-xs text-neutral-500 tracking-widest uppercase">Mode</label>
-                  <div className="flex rounded overflow-hidden border border-neutral-700">
-                    <button
-                      onClick={() => handleModeChange('realtime')}
-                      className={`flex-1 py-1.5 text-xs font-medium transition-colors cursor-pointer ${
-                        mode === 'realtime'
-                          ? 'bg-sky-600 text-white'
-                          : 'bg-neutral-800 text-neutral-400 hover:text-white'
-                      }`}
-                    >
-                      Real time
-                    </button>
-                    <button
-                      onClick={() => handleModeChange('scrub')}
-                      className={`flex-1 py-1.5 text-xs font-medium transition-colors cursor-pointer ${
-                        mode === 'scrub' ? 'bg-sky-600 text-white' : 'bg-neutral-800 text-neutral-400 hover:text-white'
-                      }`}
-                    >
-                      Scrub
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {/* Scrub slider */}
-              {mode === 'scrub' && flight && (
-                <div className="flex flex-col gap-2">
-                  <input
-                    type="range"
-                    min="0"
-                    max="1000"
-                    value={Math.round(scrubProgress * 1000)}
-                    onChange={(ev) => setScrubProgress(parseInt(ev.target.value) / 1000)}
-                    className="w-full accent-sky-500"
-                  />
-                </div>
-              )}
-
               {/* Info */}
-              <div className="flex flex-col gap-1">
+              {/*<div className="flex flex-col gap-1">
                 <label className="text-xs text-neutral-500 tracking-widest uppercase">Info</label>
                 <span className="flex text-xs font-mono text-neutral-400">
                   Time at origin:
@@ -794,16 +737,55 @@ function App() {
                   <span className="flex-1" />
                   {currentTime?.setZone(dstTimezone ?? undefined).toFormat('HH:mm') ?? ''}
                 </span>
-              </div>
+              </div>*/}
             </div>
-
-            {/* Sun plot */}
-            {flight && (
-              <div className="rounded-lg bg-neutral-900 border border-neutral-800 overflow-hidden">
-                <SunPlot flight={flight} progress={progress} blend={blend} />
-              </div>
-            )}
           </>
+        )}
+
+        <div className="flex-initial rounded-lg bg-neutral-900 gap-2 border border-neutral-800 p-3 flex flex-col overflow-visible">
+          {/* Mode toggle */}
+          <div className="flex flex-col gap-2">
+            <div className="flex rounded overflow-hidden border border-neutral-700">
+              <button
+                onClick={() => setMode('realtime')}
+                className={`flex-1 py-1.5 text-xs font-medium transition-colors cursor-pointer ${
+                  mode === 'realtime' ? 'bg-sky-600 text-white' : 'bg-neutral-800 text-neutral-400 hover:text-white'
+                }`}
+              >
+                Real time
+              </button>
+              <button
+                onClick={() => setMode('scrub')}
+                className={`flex-1 py-1.5 text-xs font-medium transition-colors cursor-pointer ${
+                  mode === 'scrub' ? 'bg-sky-600 text-white' : 'bg-neutral-800 text-neutral-400 hover:text-white'
+                }`}
+              >
+                Scrub
+              </button>
+            </div>
+          </div>
+
+          <div className="flex-1" />
+
+          {/* Scrub slider */}
+          {flight && (
+            <input
+              type="range"
+              min="0"
+              max="1000"
+              value={Math.round(scrubProgress * 1000)}
+              onChange={(ev) => setScrubProgress(parseInt(ev.target.value) / 1000)}
+              className="w-full accent-sky-500"
+              disabled={mode === 'realtime'}
+            />
+          )}
+        </div>
+
+        {/* Sun plot */}
+        {flight && (
+          <div className="rounded-lg bg-neutral-900 border border-neutral-800 overflow-hidden">
+            <SunPlot flight={flight} progress={progress} blend={blend} />
+          </div>
         )}
       </div>
     </div>
