@@ -1,5 +1,5 @@
 import { LongLat } from './types'
-import { createCircleRect, createLine, geodesic, makeMat, verticesFromCoords, vsub } from './util'
+import { createLine, geodesic, makeMat, verticesFromCoords, vsub } from './util'
 
 type WebGL = WebGLRenderingContext
 
