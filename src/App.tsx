@@ -430,19 +430,19 @@ function App() {
     return { start, end, duration: end.diff(start), src: src.coords, dst: dst.coords }
   }, [departure, arrival, src, dst])
 
+  const [realTime, setRealTime] = useState(DateTime.now())
+  useEffect(() => {
+    const t = setInterval(() => setRealTime(DateTime.now()), 1000)
+    return () => clearInterval(t)
+  }, [setRealTime])
+
   const progress = useMemo(() => {
     if (!flight) return 0
     if (mode === 'scrub') return scrubProgress
-    const now = DateTime.now()
+    const now = realTime
     const p = now.diff(flight.start).toMillis() / flight.duration.toMillis()
     return Math.min(Math.max(p, 0), 1)
-  }, [flight, mode, scrubProgress])
-
-  const [realTime, setRealTime] = useState(DateTime.now())
-  useEffect(() => {
-    const t = setInterval(() => setRealTime(DateTime.now()), 2000)
-    return () => clearInterval(t)
-  }, [setRealTime])
+  }, [flight, mode, scrubProgress, realTime])
 
   const currentTime = useMemo(() => {
     if (!flight || mode === 'realtime') return realTime
@@ -459,13 +459,10 @@ function App() {
   const rotate = location[0] / (2 * Math.PI)
 
   useEffect(() => {
-    const render = () => {
-      if (!canvas.current) return
-      map.current ||= new GlMap(canvas.current)
-      map.current.setParams(rotate, sun, srcCoords, location, heading, dstCoords)
-      map.current.render()
-    }
-    render()
+    if (!canvas.current) return
+    map.current ||= new GlMap(canvas.current)
+    map.current.setParams(rotate, sun, srcCoords, location, heading, dstCoords)
+    map.current.render()
   }, [rotate, sun, srcCoords, dstCoords, location, heading, blend, mode])
 
   useEffect(() => {
@@ -773,7 +770,7 @@ function App() {
               type="range"
               min="0"
               max="1000"
-              value={Math.round(scrubProgress * 1000)}
+              value={Math.round((mode === 'realtime' ? progress : scrubProgress) * 1000)}
               onChange={(ev) => setScrubProgress(parseInt(ev.target.value) / 1000)}
               className="w-full accent-sky-500"
               disabled={mode === 'realtime'}
