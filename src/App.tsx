@@ -4,15 +4,9 @@ import { Airport, loadAirports } from './airports'
 import { calcSun } from './sun'
 import { DateTime } from 'luxon'
 import { SunPlot, Flight } from './SunPlot'
-import { Map } from './map'
+import { GlMap } from './map'
 import { find as findTimezone } from 'browser-geo-tz'
 import { useLocalStorage } from './hooks'
-
-/**
- * TODO:
- * - Add plane icon to show trip progress
- * - Draw sun with a polygon
- */
 
 const ZERO: [number, number] = [0, 0]
 
@@ -43,10 +37,17 @@ function generateId(): string {
 
 //  Helpers
 
+const tzCache = new Map<Airport, string>()
+
 async function getTimezone(airport: Airport): Promise<string> {
+  const cached = tzCache.get(airport)
+  if (cached) return cached
+
   const [lon, lat] = airport.coords
   const zones = await findTimezone(lat * (180 / Math.PI), lon * (180 / Math.PI))
-  return zones[0] ?? 'UTC'
+  const result = zones[0] ?? 'UTC'
+  tzCache.set(airport, result)
+  return result
 }
 
 function formatDuration(minutes: number): string {
@@ -360,7 +361,7 @@ function FlightsList({ flights, activeId, onSelect, onNew, onDelete, onRename, o
 
 function App() {
   const canvas = useRef<HTMLCanvasElement>(null)
-  const map = useRef<Map | undefined>()
+  const map = useRef<GlMap | undefined>()
 
   const [ports, setPorts] = useState<Airport[]>([])
   const [srcText, setSrcText] = useLocalStorage('srcText', '')
@@ -382,16 +383,8 @@ function App() {
   // Track whether the current editor state is "unsaved" relative to the active record
   const [isDirty, setIsDirty] = useLocalStorage('isDirty', false)
 
-  // Tick every minute in realtime mode
-  const [, setTick] = useState(0)
   useEffect(() => {
-    if (mode !== 'realtime') return
-    const interval = setInterval(() => setTick((t) => t + 1), 60000)
-    return () => clearInterval(interval)
-  }, [mode])
-
-  useEffect(() => {
-    if (ports.length === 0) loadAirports().then(setPorts)
+    loadAirports().then(setPorts)
   }, [])
 
   const src = ports.find((p) => p.code.toLowerCase() === srcText.toLowerCase()) ?? null
@@ -401,8 +394,6 @@ function App() {
 
   useEffect(() => {
     if (!src || !departureStr) {
-      setSrcTimezone(null)
-      setDeparture(null)
       return
     }
     getTimezone(src).then((tz) => {
@@ -410,12 +401,10 @@ function App() {
       const dt = DateTime.fromISO(departureStr, { zone: tz })
       setDeparture(dt.isValid ? dt.toISO() : null)
     })
-  }, [src?.code, departureStr])
+  }, [src, departureStr, setDeparture, setSrcTimezone])
 
   useEffect(() => {
     if (!dst || !arrivalStr) {
-      setDstTimezone(null)
-      setArrival(null)
       return
     }
     getTimezone(dst).then((tz) => {
@@ -423,7 +412,7 @@ function App() {
       const dt = DateTime.fromISO(arrivalStr, { zone: tz })
       setArrival(dt.isValid ? dt.toISO() : null)
     })
-  }, [dst?.code, arrivalStr])
+  }, [dst, arrivalStr, setArrival, setDstTimezone])
 
   const durationMinutes = useMemo(() => {
     if (!departure || !arrival) return null
@@ -439,7 +428,7 @@ function App() {
     const end = DateTime.fromISO(arrival)
     if (!start.isValid || !end.isValid || end <= start) return null
     return { start, end, duration: end.diff(start), src: src.coords, dst: dst.coords }
-  }, [departure, arrival, src?.code, dst?.code])
+  }, [departure, arrival, src, dst])
 
   const progress = useMemo(() => {
     if (!flight) return 0
@@ -449,11 +438,16 @@ function App() {
     return Math.min(Math.max(p, 0), 1)
   }, [flight, mode, scrubProgress])
 
+  const [realTime, setRealTime] = useState(DateTime.now())
+  useEffect(() => {
+    const t = setInterval(() => setRealTime(DateTime.now()), 2000)
+    return () => clearInterval(t)
+  }, [setRealTime])
+
   const currentTime = useMemo(() => {
-    if (mode === 'realtime') return DateTime.now()
-    if (!flight) return null
+    if (!flight || mode === 'realtime') return realTime
     return DateTime.fromMillis(flight.start.toMillis() + progress * flight.duration.toMillis())
-  }, [flight, mode, progress])
+  }, [flight, mode, realTime, progress])
 
   const handleModeChange = useCallback(
     (next: Mode) => {
@@ -464,18 +458,23 @@ function App() {
       }
       setMode(next)
     },
-    [flight],
+    [flight, setMode, setScrubProgress],
   )
 
-  const location = useMemo(() => interpCoords(srcCoords, dstCoords, progress), [srcCoords, dstCoords, progress])
-  const sun = useMemo(() => calcSun(currentTime ?? DateTime.now()), [currentTime])
+  const [location, heading] = useMemo(() => {
+    const loc = interpCoords(srcCoords, dstCoords, progress)
+    const loc2 = interpCoords(srcCoords, dstCoords, progress + 0.001)
+    const heading = Math.atan2(loc2[1] - loc[1], loc2[0] - loc[0])
+    return [loc, heading]
+  }, [srcCoords, dstCoords, progress])
+  const sun = useMemo(() => calcSun(currentTime), [currentTime])
   const rotate = location[0] / (2 * Math.PI)
 
   useEffect(() => {
     const render = () => {
       if (!canvas.current) return
-      map.current ||= new Map(canvas.current)
-      map.current.setParams(rotate, sun, srcCoords, location, dstCoords)
+      map.current ||= new GlMap(canvas.current)
+      map.current.setParams(rotate, sun, srcCoords, location, heading, dstCoords)
       map.current.render()
     }
     render()
@@ -483,7 +482,7 @@ function App() {
       const interval = setInterval(render, 1000)
       return () => clearInterval(interval)
     }
-  }, [rotate, sun, srcCoords, location, blend, mode])
+  }, [rotate, sun, srcCoords, dstCoords, location, heading, blend, mode])
 
   useEffect(() => {
     const render = () => map.current?.render()

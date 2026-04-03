@@ -222,6 +222,8 @@ export function createCircle(c: Vec2, r: number, n: number): Float32Array {
   return new Float32Array(xs)
 }
 
-export function makeMat(offset: Vec2, scale: number): number[] {
-  return [scale, 0, 0, 0, 0, scale, 0, 0, 0, 0, 1, 0, offset[0], offset[1], 0, 1]
+export function makeMat(offset: Vec2, scale = 1, rotation = 0): number[] {
+  const c = Math.cos(rotation) * scale
+  const s = Math.sin(rotation) * scale
+  return [c, s, 0, 0, -s, c, 0, 0, 0, 0, 1, 0, offset[0], offset[1], 0, 1]
 }

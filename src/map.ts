@@ -8,13 +8,14 @@ interface ShaderSource {
   fragment: string
 }
 
-export class Map {
+export class GlMap {
   private canvas: HTMLCanvasElement
   private gl: WebGL
   private props: Promise<{
     mapShader: WebGLProgram
     lineShader: WebGLProgram
     sunShader: WebGLProgram
+    spriteShader: WebGLProgram
     mapBuffer: WebGLBuffer
     lineBuffer: WebGLBuffer
     sunBuffer: WebGLBuffer
@@ -24,10 +25,12 @@ export class Map {
     sun: undefined as LongLat | undefined,
     src: [0, 0] as LongLat,
     loc: [0, 0] as LongLat,
+    heading: 0,
     dst: [0, 0] as LongLat,
   }
   blend = true
   showSun = true
+  showPlane = true
 
   constructor(canvas: HTMLCanvasElement) {
     const gl = canvas.getContext('webgl2')
@@ -57,9 +60,15 @@ export class Map {
       fragment: await (await fetch(`${import.meta.env.BASE_URL}sun.frag`)).text(),
     })
 
+    const spriteShader = initShader(gl, {
+      vertex: await (await fetch(`${import.meta.env.BASE_URL}sprite.vert`)).text(),
+      fragment: await (await fetch(`${import.meta.env.BASE_URL}sprite.frag`)).text(),
+    })
+
     const dayTex = await loadTexture(gl, `${import.meta.env.BASE_URL}earth.jpg`.toString())
     const nightTex = await loadTexture(gl, `${import.meta.env.BASE_URL}night.jpg`.toString())
     const strokeTex = await loadTexture(gl, `${import.meta.env.BASE_URL}stroke.png`.toString())
+    const planeTex = await loadTexture(gl, `${import.meta.env.BASE_URL}plane.png`.toString())
     gl.useProgram(mapShader)
     gl.activeTexture(gl.TEXTURE0)
     gl.bindTexture(gl.TEXTURE_2D, dayTex)
@@ -67,6 +76,8 @@ export class Map {
     gl.bindTexture(gl.TEXTURE_2D, nightTex)
     gl.activeTexture(gl.TEXTURE2)
     gl.bindTexture(gl.TEXTURE_2D, strokeTex)
+    gl.activeTexture(gl.TEXTURE3)
+    gl.bindTexture(gl.TEXTURE_2D, planeTex)
     gl.uniform1i(gl.getUniformLocation(mapShader, 'uDay'), 0)
     gl.uniform1i(gl.getUniformLocation(mapShader, 'uNight'), 1)
     gl.uniform1i(gl.getUniformLocation(mapShader, 'uStroke'), 2)
@@ -85,16 +96,16 @@ export class Map {
     gl.bindBuffer(gl.ARRAY_BUFFER, sunBuffer)
     gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.DYNAMIC_DRAW)
 
-    return { mapShader, lineShader, sunShader, mapBuffer, lineBuffer, sunBuffer }
+    return { mapShader, lineShader, sunShader, spriteShader, mapBuffer, lineBuffer, sunBuffer }
   }
 
-  async setParams(rotate: number, sun: LongLat | undefined, src: LongLat, loc: LongLat, dst: LongLat) {
-    this.params = { rotate, sun, src, loc, dst }
+  async setParams(rotate: number, sun: LongLat | undefined, src: LongLat, loc: LongLat, heading: number, dst: LongLat) {
+    this.params = { rotate, sun, src, loc, heading, dst }
   }
 
   async render() {
     const { canvas, gl } = this
-    const { rotate, sun, src, loc, dst } = this.params
+    const { rotate, sun, src, loc, heading, dst } = this.params
     const props = await this.props
 
     if (resizeCanvasToDisplaySize(canvas)) {
@@ -115,7 +126,7 @@ export class Map {
     gl.bindBuffer(gl.ARRAY_BUFFER, props.mapBuffer)
     gl.enableVertexAttribArray(vertexPosition)
     gl.vertexAttribPointer(vertexPosition, 2, gl.FLOAT, false, 0, 0)
-    if (sun) gl.uniform2fv(gl.getUniformLocation(props.mapShader, 'uSun'), sun)
+    gl.uniform2fv(gl.getUniformLocation(props.mapShader, 'uSun'), sun ?? [0, 0])
     gl.uniform1f(gl.getUniformLocation(props.mapShader, 'uRotate'), rotate)
     gl.uniform1i(gl.getUniformLocation(props.mapShader, 'uBlend'), this.blend ? 1 : 0)
     gl.drawArrays(gl.TRIANGLES, 0, 6)
@@ -160,6 +171,26 @@ export class Map {
           gl.getUniformLocation(props.sunShader, 'uView'),
           false,
           makeMat([offset + (sun[0] - 2 * Math.PI * rotate) / Math.PI, sun[1] / Math.PI], 0.02),
+        )
+        gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4)
+      }
+    }
+
+    if (this.showPlane) {
+      gl.useProgram(props.spriteShader)
+      gl.bindBuffer(gl.ARRAY_BUFFER, props.sunBuffer)
+      gl.enableVertexAttribArray(vertexPosition2)
+      gl.vertexAttribPointer(vertexPosition2, 2, gl.FLOAT, false, 0, 0)
+      gl.uniform1i(gl.getUniformLocation(props.spriteShader, 'uTex'), 3)
+      for (const offset of [-2, 0, 2]) {
+        gl.uniformMatrix4fv(
+          gl.getUniformLocation(props.spriteShader, 'uView'),
+          false,
+          makeMat(
+            [offset + (loc[0] - 2 * Math.PI * rotate) / Math.PI, loc[1] / Math.PI],
+            0.016,
+            heading + 0.25 * Math.PI,
+          ),
         )
         gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4)
       }
