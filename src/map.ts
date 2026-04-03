@@ -24,8 +24,9 @@ export class Map {
     src: [0, 0] as LongLat,
     loc: [0, 0] as LongLat,
     dst: [0, 0] as LongLat,
-    blend: true,
   }
+  blend = true
+  showSun = false
 
   constructor(canvas: HTMLCanvasElement) {
     const gl = canvas.getContext('webgl2')
@@ -81,13 +82,14 @@ export class Map {
     return { mapShader, lineShader, mapBuffer, lineBuffer, sunBuffer }
   }
 
-  async setParams(rotate: number, sun: LongLat | undefined, src: LongLat, loc: LongLat, dst: LongLat, blend: boolean) {
-    this.params = { rotate, sun, src, loc, dst, blend }
+  async setParams(rotate: number, sun: LongLat | undefined, src: LongLat, loc: LongLat, dst: LongLat) {
+    this.params = { rotate, sun, src, loc, dst }
   }
 
   async render() {
     const { canvas, gl } = this
-    const { rotate, sun, src, loc, dst, blend } = this.params
+    const { rotate, src, loc, dst } = this.params
+    const sun = this.showSun ? this.params.sun : undefined
     const props = await this.props
 
     if (resizeCanvasToDisplaySize(canvas)) {
@@ -110,7 +112,7 @@ export class Map {
     gl.vertexAttribPointer(vertexPosition, 2, gl.FLOAT, false, 0, 0)
     if (sun) gl.uniform2fv(gl.getUniformLocation(props.mapShader, 'uSun'), sun)
     gl.uniform1f(gl.getUniformLocation(props.mapShader, 'uRotate'), rotate)
-    gl.uniform1i(gl.getUniformLocation(props.mapShader, 'uBlend'), +blend)
+    gl.uniform1i(gl.getUniformLocation(props.mapShader, 'uBlend'), this.blend ? 1 : 0)
     gl.drawArrays(gl.TRIANGLES, 0, 6)
 
     gl.useProgram(props.lineShader)

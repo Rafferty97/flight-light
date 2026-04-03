@@ -127,7 +127,6 @@ function App() {
   const [arrivalStr, setArrivalStr] = useLocalStorage('arrivalStr', '')
   const [mode, setMode] = useLocalStorage<Mode>('mode', 'realtime')
   const [scrubProgress, setScrubProgress] = useLocalStorage('scrubProgress', 0)
-  const [blend] = useLocalStorage('blend', true)
   const [srcTimezone, setSrcTimezone] = useLocalStorage<string | null>('srcTimezone', null)
   const [dstTimezone, setDstTimezone] = useLocalStorage<string | null>('dstTimezone', null)
   const [departure, setDeparture] = useLocalStorage<string | null>('departure', null)
@@ -222,7 +221,7 @@ function App() {
       }
       setMode(next)
     },
-    [flight],
+    [flight, setMode, setScrubProgress],
   )
 
   const location = useMemo(() => interpCoords(srcCoords, dstCoords, progress), [srcCoords, dstCoords, progress])
@@ -233,7 +232,7 @@ function App() {
     const render = () => {
       if (!canvas.current) return
       map.current ||= new Map(canvas.current)
-      map.current.setParams(rotate, sun, srcCoords, location, dstCoords, blend)
+      map.current.setParams(rotate, sun, srcCoords, location, dstCoords)
       map.current.render()
     }
     render()
@@ -241,7 +240,7 @@ function App() {
       const interval = setInterval(render, 1000)
       return () => clearInterval(interval)
     }
-  }, [rotate, sun, srcCoords, location, blend, mode])
+  }, [rotate, sun, srcCoords, dstCoords, location, mode])
 
   useEffect(() => {
     const render = () => map.current?.render()
@@ -363,7 +362,7 @@ function App() {
         {/* Sun plot */}
         {flight && (
           <div className="rounded-lg bg-neutral-900 border border-neutral-800 overflow-hidden">
-            <SunPlot flight={flight} progress={progress} blend={blend} />
+            <SunPlot flight={flight} progress={progress} blend />
           </div>
         )}
       </div>
