@@ -1,5 +1,5 @@
 import { LongLat } from './types'
-import { createCircle, createLine, geodesic, makeMat, verticesFromCoords, vsub } from './util'
+import { createCircleRect, createLine, geodesic, makeMat, verticesFromCoords, vsub } from './util'
 
 type WebGL = WebGLRenderingContext
 
@@ -14,6 +14,7 @@ export class Map {
   private props: Promise<{
     mapShader: WebGLProgram
     lineShader: WebGLProgram
+    sunShader: WebGLProgram
     mapBuffer: WebGLBuffer
     lineBuffer: WebGLBuffer
     sunBuffer: WebGLBuffer
@@ -26,7 +27,7 @@ export class Map {
     dst: [0, 0] as LongLat,
   }
   blend = true
-  showSun = false
+  showSun = true
 
   constructor(canvas: HTMLCanvasElement) {
     const gl = canvas.getContext('webgl2')
@@ -49,6 +50,11 @@ export class Map {
     const lineShader = initShader(gl, {
       vertex: await (await fetch(`${import.meta.env.BASE_URL}line.vert`)).text(),
       fragment: await (await fetch(`${import.meta.env.BASE_URL}line.frag`)).text(),
+    })
+
+    const sunShader = initShader(gl, {
+      vertex: await (await fetch(`${import.meta.env.BASE_URL}sun.vert`)).text(),
+      fragment: await (await fetch(`${import.meta.env.BASE_URL}sun.frag`)).text(),
     })
 
     const dayTex = await loadTexture(gl, `${import.meta.env.BASE_URL}earth.jpg`.toString())
@@ -77,9 +83,9 @@ export class Map {
     const sunBuffer = gl.createBuffer()
     if (!sunBuffer) throw Error('Cannot create buffer')
     gl.bindBuffer(gl.ARRAY_BUFFER, sunBuffer)
-    gl.bufferData(gl.ARRAY_BUFFER, createCircle([0, 0], 1, 12), gl.DYNAMIC_DRAW)
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.DYNAMIC_DRAW)
 
-    return { mapShader, lineShader, mapBuffer, lineBuffer, sunBuffer }
+    return { mapShader, lineShader, sunShader, mapBuffer, lineBuffer, sunBuffer }
   }
 
   async setParams(rotate: number, sun: LongLat | undefined, src: LongLat, loc: LongLat, dst: LongLat) {
@@ -88,8 +94,7 @@ export class Map {
 
   async render() {
     const { canvas, gl } = this
-    const { rotate, src, loc, dst } = this.params
-    const sun = this.showSun ? this.params.sun : undefined
+    const { rotate, sun, src, loc, dst } = this.params
     const props = await this.props
 
     if (resizeCanvasToDisplaySize(canvas)) {
@@ -145,18 +150,18 @@ export class Map {
       gl.drawArrays(gl.TRIANGLE_STRIP, 0, linePoints3.length / 2)
     }
 
-    if (sun) {
+    if (sun && this.showSun) {
+      gl.useProgram(props.sunShader)
       gl.bindBuffer(gl.ARRAY_BUFFER, props.sunBuffer)
       gl.enableVertexAttribArray(vertexPosition2)
       gl.vertexAttribPointer(vertexPosition2, 2, gl.FLOAT, false, 0, 0)
-      gl.uniform4fv(gl.getUniformLocation(props.lineShader, 'uColor'), [1, 1, 0.5, 1])
       for (const offset of [-2, 0, 2]) {
         gl.uniformMatrix4fv(
-          gl.getUniformLocation(props.lineShader, 'uView'),
+          gl.getUniformLocation(props.sunShader, 'uView'),
           false,
           makeMat([offset + (sun[0] - 2 * Math.PI * rotate) / Math.PI, sun[1] / Math.PI], 0.02),
         )
-        gl.drawArrays(gl.TRIANGLE_STRIP, 0, 50)
+        gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4)
       }
     }
   }
